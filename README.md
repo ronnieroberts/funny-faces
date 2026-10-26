@@ -22,6 +22,19 @@ focused button (Enter on a remote, or a tap): it plays, goes full screen and hid
 face. Back, Escape or a tap brings the controls back. Other options: `face=<id>`, `color=<hex, no #>`,
 `loop=0` to play once. Not yet tested on a real Fire TV.
 
+## Showing the face on other screens
+
+Open the page with `?screen` added on the other display (a TV, for example). It shows a 6-character code.
+On the main screen open the Screens tab, type the code and press Add screen. The display then shows the
+same character, colour and layout, and its mouth follows the microphone on the main screen. Only the
+microphone drives the mouth; play music through other speakers and let the main device hear it.
+
+How it works: the main page sends the character and settings when they change, and a few small mouth
+values about 15 times a second while there is sound. Nothing is sent while it is quiet. A small relay
+(API Gateway WebSocket, one Lambda, one DynamoDB table; see `relay/`) passes the messages along. Displays
+remember their pairing and reconnect by themselves. Sharing needs `config.json` next to `index.html`
+(see `config.example.json`); it is not committed.
+
 ## Hosting and caching
 
 `node scripts/build.mjs` writes `dist/` with content-hashed script names. Host `dist/` on S3 behind

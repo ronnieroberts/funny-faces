@@ -14,8 +14,8 @@
     display:flex; flex-direction:column; }
   #nav.hidden { display:none; }
   #nav h1 { font-size:1.1em; margin:0; padding:14px 16px 8px; }
-  .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:0 10px 10px; border-bottom:1px solid var(--line); }
-  .tabs button { padding:8px 4px; }
+  .tabs { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:0 10px 10px; border-bottom:1px solid var(--line); }
+  .tabs button { padding:8px 2px; font-size:.85em; }
   .tabs button[aria-selected=true] { background:var(--accent); color:#000; border-color:var(--accent); }
   .pane { display:none; padding:14px 16px; overflow:auto; flex:1; gap:10px; flex-direction:column; }
   .pane.on { display:flex; }
@@ -31,6 +31,12 @@
   .face[aria-pressed=true] { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
   .face canvas { width:100%; aspect-ratio:1; border-radius:6px; background:#000; }
   #status, small { color:var(--muted); }
+  body.screen #nav { display:none; }
+  #pairbox { position:fixed; inset:0; display:grid; place-content:center; justify-items:center; gap:1vh; text-align:center; pointer-events:none; }
+  #pairbox[hidden] { display:none; }
+  #paircode { font:700 16vmin ui-monospace,Menlo,monospace; letter-spacing:.08em; color:var(--accent); }
+  #pairmsg { font-size:2.6vmin; color:var(--fg); max-width:80vw; }
+  #pairinput { text-transform:uppercase; letter-spacing:.2em; font-family:ui-monospace,Menlo,monospace; }
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000c; border:1px solid var(--line); padding:8px 14px; border-radius:20px; color:var(--fg); opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.on { opacity:1; }
 </style>
@@ -44,6 +50,7 @@
     <button type="button" role="tab" data-tab="faces" aria-selected="false">Faces</button>
     <button type="button" role="tab" data-tab="layout" aria-selected="false">Layout</button>
     <button type="button" role="tab" data-tab="look" aria-selected="false">Look</button>
+    <button type="button" role="tab" data-tab="screens" aria-selected="false">Screens</button>
   </div>
 
   <section class="pane on" data-pane="play">
@@ -74,12 +81,25 @@
     <label>Quiet cutoff <input id="gate" type="range" min="0" max="0.9" step="0.05"></label>
   </section>
 
+  <section class="pane" data-pane="screens">
+    <div id="screenpane">
+      <p>Show this face on another screen, such as a TV. Open <b>this page with <code>?screen</code> added</b> on the other screen. It shows a code. Type the code here.</p>
+      <label>Code <input id="pairinput" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <button id="pairbtn" type="button" class="primary">Add screen</button>
+      <button id="endshare" type="button" class="danger">Stop sharing</button>
+      <div id="screenstatus" role="status"></div>
+      <small>The other screen shows what you set up here and moves its mouth as you speak into this device's microphone.</small>
+    </div>
+    <p id="noscreens" hidden>Screens need the hosted version of this page.</p>
+  </section>
+
   <div class="foot">
     <div id="status" role="status">Pick a source to begin.</div>
     <button id="fs" type="button">Hide menu</button>
     <small>Back, Esc or a tap brings this menu back. Settings stay in this browser only.</small>
   </div>
 </aside>
+<div id="pairbox" hidden><div id="paircode"></div><p id="pairmsg"></p></div>
 <div id="toast" role="status"></div>
 <script type="module" src="src/app.js"></script>
 </body>

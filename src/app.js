@@ -3,6 +3,8 @@ import { LiveVoice } from './voice.js';
 import { load, save } from './settings.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
 import { placement, drag, scale, nudge } from './layout.js';
+import { Link, loadConfig } from './relay.js';
+import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage'), ctx = canvas.getContext('2d');
@@ -23,7 +25,7 @@ function toast(m) {
 
 // ---------------------------------------------------------------- settings
 let saveTimer = 0;
-function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(settings), 250); }
+function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(settings), 250); scheduleShare(); }
 const sliders = ['size', 'x', 'y', 'glow', 'sens', 'gate'];
 function syncControls() {
   for (const id of sliders) $(id).value = settings[id];
@@ -98,6 +100,136 @@ if (params.get('pack')) {                           // ?pack=<url>: use a pack f
 }
 renderFaces();
 
+// ---------------------------------------------------------------- screens: show the face on other displays
+const screenMode = params.has('screen');                // this page is a display, not the main screen
+if (screenMode) document.body.classList.add('screen');
+const mem = {
+  get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+  del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
+};
+const ADMIN_KEY = 'face-characters.admin.v1', SCREEN_KEY = 'face-characters.screen.v1';
+let relayUrl = null, link = null;
+
+// main screen side
+let admin = mem.get(ADMIN_KEY);                         // {session, key} once a screen has been paired
+let ready = false, screensN = 0, seq = 0, pendingCode = '', shareTimer = 0, sentMouth = null, lastSend = 0;
+const epoch = Math.floor(Math.random() * 2 ** 30);
+const sayScreens = (m) => { $('screenstatus').textContent = m; };
+function screensText() {
+  return screensN > 0 ? `${screensN} screen${screensN === 1 ? '' : 's'} showing the face` : (admin ? 'Paired. Waiting for a screen to connect.' : 'No screens yet.');
+}
+function pushState() {
+  if (!ready || screenMode) return;
+  link.send({ action: 'state', state: buildState(settings, findFace(faces, settings.face).face, epoch), n: ++seq });
+}
+function scheduleShare() { clearTimeout(shareTimer); shareTimer = setTimeout(pushState, 150); }
+
+function startAdminLink() {
+  if (!relayUrl || link) return;
+  link = new Link(relayUrl, {
+    open() {
+      if (pendingCode) link.send({ action: 'pair', code: pendingCode, session: admin && admin.session, key: admin && admin.key });
+      else if (admin) link.send({ action: 'admin', session: admin.session, key: admin.key });
+    },
+    message(m) {
+      if (m.type === 'paired' && typeof m.session === 'string' && typeof m.key === 'string') {
+        admin = { session: m.session, key: m.key }; mem.set(ADMIN_KEY, admin);
+        pendingCode = ''; ready = true; screensN = Number(m.screens) || 0; sentMouth = null;
+        pushState(); sayScreens(screensText());
+      } else if (m.type === 'ready') {
+        ready = true; screensN = Number(m.screens) || 0; sentMouth = null; pushState(); sayScreens(screensText());
+      } else if (m.type === 'screens') {
+        if (m.n > 0 && screensN === 0) sentMouth = null;
+        screensN = Number(m.n) || 0; sayScreens(screensText());
+      } else if (m.type === 'error') {
+        pendingCode = '';
+        if (m.error === 'unknown_session') { admin = null; mem.del(ADMIN_KEY); ready = false; sayScreens('Sharing was reset. Add the screen again.'); }
+        else if (m.error === 'too_many_attempts') sayScreens('Too many wrong codes. Reload this page and try again.');
+        else sayScreens('That code was not recognised. Check the screen and try again.');
+      }
+    },
+    close() { ready = false; },
+  });
+  link.start();
+}
+
+function pairWith(code) {
+  const c = code.trim().toUpperCase();
+  if (c.length !== 6) { sayScreens('The code has 6 letters and numbers.'); return; }
+  pendingCode = c; sayScreens('Connecting…');
+  if (!link) startAdminLink();
+  else if (link.open) link.send({ action: 'pair', code: c, session: admin && admin.session, key: admin && admin.key });
+}
+$('pairbtn').addEventListener('click', () => { pairWith($('pairinput').value); $('pairinput').value = ''; });
+$('pairinput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pairbtn').click(); });
+$('endshare').addEventListener('click', () => {
+  if (link && link.open && admin) link.send({ action: 'end' });
+  if (link) { link.stop(); link = null; }
+  admin = null; mem.del(ADMIN_KEY); ready = false; screensN = 0; pendingCode = '';
+  sayScreens('Stopped sharing.');
+});
+
+// display side
+let display = null, curEpoch = -1, lastState = -1, lastMouthN = -1;
+const target = { open: 0, bright: 0.5, energy: 0 }, shown = { open: 0, bright: 0.5, energy: 0 };
+function showPairBox(code, msg) {
+  $('pairbox').hidden = false;
+  $('paircode').textContent = code ? code.slice(0, 3) + ' ' + code.slice(3) : '';
+  $('pairmsg').textContent = msg;
+}
+
+function startDisplayLink() {
+  let again = 0;
+  link = new Link(relayUrl, {
+    open() {
+      const s = mem.get(SCREEN_KEY);
+      link.send(s ? { action: 'screen', session: s.session } : { action: 'register' });
+    },
+    message(m) {
+      if (m.type === 'code' && typeof m.code === 'string') {
+        showPairBox(m.code, 'On the main screen open the Screens tab and type this code.');
+        clearTimeout(again);
+        again = setTimeout(() => { if (!mem.get(SCREEN_KEY)) link.send({ action: 'register' }); }, Math.max(30, (m.expires || 600) - 30) * 1000);
+      } else if (m.type === 'paired') {
+        mem.set(SCREEN_KEY, { session: m.session });
+        clearTimeout(again);
+        if (display) $('pairbox').hidden = true; else showPairBox('', 'Connected. Waiting for the main screen…');
+      } else if (m.type === 'state') {
+        const st = parseState(m.state);
+        if (!st) return;
+        if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; lastMouthN = -1; }
+        if (!isNewer(m.n, lastState)) return;
+        if (Number.isInteger(m.n)) lastState = m.n;
+        display = st; $('pairbox').hidden = true;
+      } else if (m.type === 'm') {
+        const v = unpackMouth(m.v);
+        if (!v || !isNewer(m.n, lastMouthN)) return;
+        if (Number.isInteger(m.n)) lastMouthN = m.n;
+        Object.assign(target, v);
+      } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
+        mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
+      }
+    },
+    close() { if (!display) showPairBox('', 'Connecting…'); },
+  });
+  link.start();
+}
+
+async function initRelay() {
+  const cfg = await loadConfig();
+  relayUrl = cfg && cfg.relay;
+  if (screenMode) {
+    if (!relayUrl) showPairBox('', 'Screens need the hosted version of this page.');
+    else { showPairBox('', 'Connecting…'); startDisplayLink(); }
+    return;
+  }
+  if (!relayUrl) { $('screenpane').hidden = true; $('noscreens').hidden = false; return; }
+  sayScreens(screensText());
+  if (admin) startAdminLink();
+}
+initRelay();
+
 // ---------------------------------------------------------------- tabs
 function showTab(name) {
   for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === name));
@@ -164,13 +296,15 @@ $('fs').addEventListener('click', () => {
   showMenu(false);
   document.documentElement.requestFullscreen().catch(() => {});
 });
-document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) showMenu(true); });
-if (audioUrl) playUrl(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
+if (audioUrl && !screenMode) playUrl(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
 
 // ---------------------------------------------------------------- size and move
 const pointers = new Map();
 let moved = 0, pinch = 0;
+const goFull = () => document.documentElement.requestFullscreen().catch(() => {});
 canvas.addEventListener('pointerdown', (e) => {
+  if (screenMode) { goFull(); return; }              // a display only needs a tap to go full screen
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   moved = 0; pinch = 0;
@@ -202,6 +336,7 @@ function endPointer(e) {
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
+  if (screenMode) return;
   e.preventDefault();
   Object.assign(settings, scale(settings, Math.exp(-e.deltaY * 0.0015)));
   syncControls(); persist();
@@ -209,6 +344,7 @@ canvas.addEventListener('wheel', (e) => {
 $('reset').addEventListener('click', () => { Object.assign(settings, { x: 0, y: 0, size: 0.8 }); syncControls(); persist(); });
 
 addEventListener('keydown', (e) => {
+  if (screenMode) { if (e.key === 'Enter') goFull(); return; }
   if (menuOpen()) {
     if (e.key === 'Escape') showMenu(false);
     return;                                           // let the menu use its own keys
@@ -241,16 +377,32 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   let m = { open: 0, bright: 0.5, energy: 0 };
-  if (voice) { voice.sens = settings.sens; voice.gate = settings.gate; m = voice.update(dt); }
+  if (screenMode) {                                   // follow what the main screen sent, smoothed between updates
+    const k = Math.min(1, dt * 18);
+    for (const key of ['open', 'bright', 'energy']) shown[key] += (target[key] - shown[key]) * k;
+    m = shown;
+  } else if (voice) {
+    voice.sens = settings.sens; voice.gate = settings.gate; m = voice.update(dt);
+    if (ready && screensN > 0 && now - lastSend >= 66) {
+      const v = packMouth(m);
+      if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
+    }
+  }
   if (t > blinkAt) { blink = 1; blinkAt = t + 2 + Math.random() * 4; }
   blink = Math.max(0, blink - dt * 7);
-  drawFace(fctx, findFace(faces, settings.face).face, FACE_PX, { open: m.open, bright: m.bright, blink: blink > 0.5 ? 1 : blink * 2,
-    energy: m.energy, color: settings.color, glow: settings.glow, alpha: 1, time: t });
+  const look = screenMode ? display : settings;
+  const faceObj = screenMode ? (display && display.face) : findFace(faces, settings.face).face;
+  if (faceObj) {
+    drawFace(fctx, faceObj, FACE_PX, { open: m.open, bright: m.bright, blink: blink > 0.5 ? 1 : blink * 2,
+      energy: m.energy, color: look.color, glow: look.glow, alpha: 1, time: t });
+  }
   fit();
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const p = placement(canvas.width, canvas.height, settings);
-  ctx.drawImage(face, p.left, p.top, p.s, p.s);
-  requestAnimationFrame(frame);
+  if (faceObj) {
+    const p = placement(canvas.width, canvas.height, look);
+    ctx.drawImage(face, p.left, p.top, p.s, p.s);
+  }
+requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
