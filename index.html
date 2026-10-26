@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Characters</title>
+<style>
+  :root { --bg:#000; --fg:#eee; --muted:#9a9a9a; --panel:#141414; --line:#2a2a2a; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px system-ui,sans-serif; }
+  #stage { position:fixed; inset:0; margin:auto; height:100vh; width:100vw; object-fit:contain; background:#000; }
+  #panel { position:fixed; left:12px; bottom:12px; right:12px; max-width:420px; padding:12px; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; display:grid; gap:8px; }
+  #panel.hidden { display:none; }
+  label { display:grid; grid-template-columns:90px 1fr; align-items:center; gap:8px; color:var(--muted); }
+  button, select, input[type=file] { font:inherit; color:var(--fg); background:#1f1f1f; border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  #status { color:var(--muted); min-height:1.2em; }
+  small { color:var(--muted); }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="panel">
+  <div class="row"><button id="mic" type="button">Use microphone</button><input id="file" type="file" accept="audio/*" aria-label="Play an audio file"><button id="fs" type="button">Full screen</button></div>
+  <label>Face <select id="face"></select></label>
+  <label>Color <input id="color" type="color"></label>
+  <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05"></label>
+  <label>Sensitivity <input id="sens" type="range" min="-20" max="20" step="1"></label>
+  <label>Quiet cutoff <input id="gate" type="range" min="0" max="0.9" step="0.05"></label>
+  <div id="status" role="status">Pick a source to begin.</div>
+  <small>Press H to hide this panel. Settings stay in this browser only.</small>
+</div>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
