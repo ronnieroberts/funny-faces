@@ -22,6 +22,16 @@ focused button (Enter on a remote, or a tap): it plays, goes full screen and hid
 face. Back, Escape or a tap brings the controls back. Other options: `face=<id>`, `color=<hex, no #>`,
 `loop=0` to play once. Not yet tested on a real Fire TV.
 
+## Hosting and caching
+
+`node scripts/build.mjs` writes `dist/` with content-hashed script names. Host `dist/` on S3 behind
+CloudFront (or any CDN). Scripts and media are served with `max-age=31536000, immutable`, so a repeat
+visit loads nothing from the network. Only `index.html` has a short cache (60 seconds, then stale for a
+day while it refreshes) because it is the one file that points at the current hashed scripts. Never
+overwrite a media file under the same name; give a new recording a new name.
+
+`scripts/deploy.sh` does the upload and the `index.html` invalidation (set `BUCKET` and `DISTRIBUTION`).
+
 ## What it does today
 
 - Draws the starter faces (taken from the Pumpkin Faces project) on a canvas, full screen.
