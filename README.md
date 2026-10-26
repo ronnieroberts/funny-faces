@@ -9,10 +9,10 @@ Settings are stored in this browser only (localStorage).
 Any static host works (an S3 bucket behind CloudFront, GitHub Pages, and so on). Locally:
 
 ```bash
-python3 -m http.server 8777
+python3 -m http.server 8900
 ```
 
-Then open http://localhost:8777/. The microphone needs HTTPS or localhost.
+Then open http://localhost:8900/. The microphone needs HTTPS or localhost.
 
 ## Kiosk and Fire TV use
 
