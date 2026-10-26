@@ -34,7 +34,10 @@ overwrite a media file under the same name; give a new recording a new name.
 
 ## What it does today
 
+- Left-hand menu: Play, Faces, Layout, Look. Hide it (or go full screen) and only the face remains.
 - Draws the starter faces (taken from the Pumpkin Faces project) on a canvas, full screen.
+- Add more faces by importing a face pack (one JSON file, see docs/FACEPACK.md). Packs are validated and kept in this browser; `?pack=<url>` loads one for a single visit.
+- Size and move the face: drag it, scroll or pinch to resize, or use the Layout sliders. With the menu hidden, remote arrows move it and Select switches the up and down arrows to resizing.
 - Mouth opens with the speech band (150 to 3500 Hz) of the chosen source, with an adaptive quiet cutoff.
 - Sources: microphone, or a local audio file.
 - Face, colour, glow and sensitivity are remembered in this browser.

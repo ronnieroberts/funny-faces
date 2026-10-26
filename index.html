@@ -5,33 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Face Characters</title>
 <style>
-  :root { --bg:#000; --fg:#eee; --muted:#9a9a9a; --panel:#141414; --line:#2a2a2a; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px system-ui,sans-serif; }
-  #stage { position:fixed; inset:0; margin:auto; height:100vh; width:100vw; object-fit:contain; background:#000; }
-  #panel { position:fixed; left:12px; bottom:12px; right:12px; max-width:420px; padding:12px; background:var(--panel);
-    border:1px solid var(--line); border-radius:10px; display:grid; gap:8px; }
-  #panel.hidden { display:none; }
-  label { display:grid; grid-template-columns:90px 1fr; align-items:center; gap:8px; color:var(--muted); }
+  :root { --bg:#000; --fg:#eee; --muted:#9a9a9a; --panel:#111; --line:#2a2a2a; --accent:#ff8a1f; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px system-ui,sans-serif; overflow:hidden; }
+  #stage { position:fixed; inset:0; width:100vw; height:100vh; background:#000; touch-action:none; cursor:grab; }
+  #stage.dragging { cursor:grabbing; }
+  #nav { position:fixed; top:0; left:0; bottom:0; width:340px; max-width:90vw; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; }
+  #nav.hidden { display:none; }
+  #nav h1 { font-size:1.1em; margin:0; padding:14px 16px 8px; }
+  .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:0 10px 10px; border-bottom:1px solid var(--line); }
+  .tabs button { padding:8px 4px; }
+  .tabs button[aria-selected=true] { background:var(--accent); color:#000; border-color:var(--accent); }
+  .pane { display:none; padding:14px 16px; overflow:auto; flex:1; gap:10px; flex-direction:column; }
+  .pane.on { display:flex; }
+  .foot { padding:10px 16px; border-top:1px solid var(--line); display:grid; gap:8px; }
+  label { display:grid; grid-template-columns:96px 1fr; align-items:center; gap:8px; color:var(--muted); }
+  button, select, input[type=file], input[type=text] { font:inherit; color:var(--fg); background:#1f1f1f; border:1px solid var(--line); border-radius:8px; padding:8px; }
   button:focus-visible, select:focus-visible, input:focus-visible { outline:3px solid #fff; outline-offset:2px; }
-  #play { font-size:1.2em; padding:12px 18px; }
-  button, select, input[type=file] { font:inherit; color:var(--fg); background:#1f1f1f; border:1px solid var(--line); border-radius:8px; padding:8px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; }
-  #status { color:var(--muted); min-height:1.2em; }
-  small { color:var(--muted); }
+  button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-size:1.1em; padding:12px; }
+  button.danger { color:#ff8f8f; }
+  h2 { font-size:.8em; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:8px 0 0; display:flex; justify-content:space-between; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .face { padding:4px; display:grid; gap:4px; justify-items:center; font-size:.8em; }
+  .face[aria-pressed=true] { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .face canvas { width:100%; aspect-ratio:1; border-radius:6px; background:#000; }
+  #status, small { color:var(--muted); }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000c; border:1px solid var(--line); padding:8px 14px; border-radius:20px; color:var(--fg); opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.on { opacity:1; }
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
-<div id="panel">
-  <div class="row"><button id="play" type="button" autofocus>Play and full screen</button><button id="mic" type="button">Use microphone</button><input id="file" type="file" accept="audio/*" aria-label="Play an audio file"><button id="fs" type="button">Full screen</button></div>
-  <label>Face <select id="face"></select></label>
-  <label>Color <input id="color" type="color"></label>
-  <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05"></label>
-  <label>Sensitivity <input id="sens" type="range" min="-20" max="20" step="1"></label>
-  <label>Quiet cutoff <input id="gate" type="range" min="0" max="0.9" step="0.05"></label>
-  <div id="status" role="status">Pick a source to begin.</div>
-  <small>Press H to hide this panel. Settings stay in this browser only.</small>
-</div>
+<aside id="nav">
+  <h1>Face Characters</h1>
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button type="button" role="tab" data-tab="play" aria-selected="true">Play</button>
+    <button type="button" role="tab" data-tab="faces" aria-selected="false">Faces</button>
+    <button type="button" role="tab" data-tab="layout" aria-selected="false">Layout</button>
+    <button type="button" role="tab" data-tab="look" aria-selected="false">Look</button>
+  </div>
+
+  <section class="pane on" data-pane="play">
+    <button id="play" class="primary" type="button" autofocus>Play and full screen</button>
+    <button id="mic" type="button">Use microphone</button>
+    <label>Audio file <input id="file" type="file" accept="audio/*"></label>
+    <small>Or open this page with <code>?audio=</code> and a link to a sound.</small>
+  </section>
+
+  <section class="pane" data-pane="faces">
+    <label>Add faces <input id="packfile" type="file" accept=".json,application/json"></label>
+    <small>A face pack is one JSON file. See docs/FACEPACK.md.</small>
+    <div id="facelist"></div>
+  </section>
+
+  <section class="pane" data-pane="layout">
+    <label>Size <input id="size" type="range" min="0.1" max="3" step="0.01"></label>
+    <label>Left / right <input id="x" type="range" min="-1" max="1" step="0.01"></label>
+    <label>Up / down <input id="y" type="range" min="-1" max="1" step="0.01"></label>
+    <button id="reset" type="button">Center and reset size</button>
+    <small>With the menu hidden: drag the face to move it, scroll or pinch to resize. On a remote, the arrows move it; press Select to switch to size mode (up and down resize).</small>
+  </section>
+
+  <section class="pane" data-pane="look">
+    <label>Color <input id="color" type="color"></label>
+    <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05"></label>
+    <label>Sensitivity <input id="sens" type="range" min="-20" max="20" step="1"></label>
+    <label>Quiet cutoff <input id="gate" type="range" min="0" max="0.9" step="0.05"></label>
+  </section>
+
+  <div class="foot">
+    <div id="status" role="status">Pick a source to begin.</div>
+    <button id="fs" type="button">Hide menu</button>
+    <small>Back, Esc or a tap brings this menu back. Settings stay in this browser only.</small>
+  </div>
+</aside>
+<div id="toast" role="status"></div>
 <script type="module" src="src/app.js"></script>
 </body>
 </html>
