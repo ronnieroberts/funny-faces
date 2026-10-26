@@ -107,7 +107,7 @@ for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('cli
 
 // ---------------------------------------------------------------- audio
 let audio = null, voice = null, stream = null, el = null;
-const audioUrl = params.get('audio');
+const audioUrl = globalThis.FACE_MIC_ONLY ? null : params.get('audio');
 function ensureAudio() {
   if (!audio) { audio = new AudioContext(); voice = new LiveVoice(audio); }
   if (audio.state === 'suspended') audio.resume();
