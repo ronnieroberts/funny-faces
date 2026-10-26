@@ -42,6 +42,13 @@ test('repeats are not worth sending', () => {
   assert.equal(changed([10, 10, 10], [11, 10, 10]), false);
   assert.equal(changed([10, 10, 10], [13, 10, 10]), true);
 });
+test('a relay address baked into the page wins and needs no request', async () => {
+  const doc = (content) => ({ querySelector: () => ({ content }) });
+  const never = async () => { throw new Error('should not fetch'); };
+  assert.equal((await loadConfig(never, doc('wss://example.com/prod'))).relay, 'wss://example.com/prod');
+  assert.equal(await loadConfig(never, doc('ws://example.com')), null);
+  assert.equal(await loadConfig(never, doc('')), null);
+});
 test('config must give a secure websocket address', async () => {
   const ok = (j) => async () => ({ ok: true, json: async () => j });
   assert.equal((await loadConfig(ok({ relay: 'wss://example.com/prod' }))).relay, 'wss://example.com/prod');

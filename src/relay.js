@@ -1,11 +1,16 @@
 // The connection to the relay (a WebSocket). It reconnects by itself, and keeps the line from timing out.
 const PING_MS = 4 * 60 * 1000;
 
-export async function loadConfig(fetchFn = globalThis.fetch) {
+const secure = (u) => typeof u === 'string' && /^wss:\/\//.test(u);
+
+/** The relay address: baked into the page by the build (<meta name="relay">), else read from config.json. */
+export async function loadConfig(fetchFn = globalThis.fetch, doc = globalThis.document) {
+  const meta = doc && doc.querySelector && doc.querySelector('meta[name="relay"]');
+  if (meta && secure(meta.content)) return { relay: meta.content };
   try {
     const r = await fetchFn('config.json', { cache: 'no-store' });
     const c = r.ok ? await r.json() : null;
-    return c && typeof c.relay === 'string' && /^wss:\/\//.test(c.relay) ? c : null;
+    return c && secure(c.relay) ? c : null;
   } catch { return null; }
 }
 

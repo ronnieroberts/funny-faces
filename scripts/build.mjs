@@ -1,7 +1,7 @@
 // Builds dist/: every script gets a content-hashed name so it can be cached for a year.
 // index.html is the only file with a short cache time; it points at the hashed scripts.
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const order = ['response.js', 'facepack.js', 'layout.js', 'settings.js', 'packs.js', 'voice.js', 'relay.js', 'share.js', 'app.js'];   // dependencies first
 const names = {};
@@ -20,6 +20,11 @@ for (const f of order) {
 }
 
 let html = readFileSync('index.html', 'utf8');
+// The relay address (from the untracked config.json) is baked into the page, so the page needs no second request.
+if (existsSync('config.json')) {
+  const relay = JSON.parse(readFileSync('config.json', 'utf8')).relay;
+  if (/^wss:\/\/[\w.\-\/]+$/.test(relay || '')) html = html.replace('<meta name="relay" content="">', `<meta name="relay" content="${relay}">`);
+}
 html = html.replace('src/app.js', `assets/${names['app.js']}`);
 writeFileSync('dist/index.html', html);
 console.log(JSON.stringify(names, null, 2));
