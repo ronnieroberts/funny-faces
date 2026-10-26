@@ -12,6 +12,8 @@
     border:1px solid var(--line); border-radius:10px; display:grid; gap:8px; }
   #panel.hidden { display:none; }
   label { display:grid; grid-template-columns:90px 1fr; align-items:center; gap:8px; color:var(--muted); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  #play { font-size:1.2em; padding:12px 18px; }
   button, select, input[type=file] { font:inherit; color:var(--fg); background:#1f1f1f; border:1px solid var(--line); border-radius:8px; padding:8px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; }
   #status { color:var(--muted); min-height:1.2em; }
@@ -21,7 +23,7 @@
 <body>
 <canvas id="stage"></canvas>
 <div id="panel">
-  <div class="row"><button id="mic" type="button">Use microphone</button><input id="file" type="file" accept="audio/*" aria-label="Play an audio file"><button id="fs" type="button">Full screen</button></div>
+  <div class="row"><button id="play" type="button" autofocus>Play and full screen</button><button id="mic" type="button">Use microphone</button><input id="file" type="file" accept="audio/*" aria-label="Play an audio file"><button id="fs" type="button">Full screen</button></div>
   <label>Face <select id="face"></select></label>
   <label>Color <input id="color" type="color"></label>
   <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05"></label>

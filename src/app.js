@@ -26,16 +26,54 @@ function stopSources() {
   if (el) { el.pause(); el = null; }
   if (voice) try { voice.analyser.disconnect(); } catch { /* not connected */ }
 }
+const params = new URLSearchParams(location.search);
+// ?audio=<url> (same site or CORS-enabled), ?face=<id>, ?color=<hex without #>, ?loop=0 to play once
+const audioUrl = params.get('audio');
+if (faces.some((f) => f.id === params.get('face'))) { settings.face = params.get('face'); $('face').value = settings.face; }
+if (/^[0-9a-fA-F]{6}$/.test(params.get('color') || '')) { settings.color = '#' + params.get('color'); $('color').value = settings.color; }
+
+function playUrl(url, label) {
+  ensureAudio(); stopSources();
+  el = new Audio(url);
+  el.crossOrigin = 'anonymous';
+  el.loop = params.get('loop') !== '0';
+  const src = audio.createMediaElementSource(el);
+  voice.connect(src);
+  src.connect(audio.destination);
+  return el.play().then(() => { say('Playing ' + label); return true; }, () => false);
+}
+
+function showPanel(on) { $('panel').classList.toggle('hidden', !on); if (on) $('play').focus(); }
+
+// One press on a remote or a tap: start the sound and hide everything but the face.
+async function start() {
+  if (audioUrl) {
+    if (!(await playUrl(audioUrl, 'the audio'))) { say('The audio could not be played'); return; }
+  } else if (!stream && !el) {
+    try { await useMic(); } catch { return; }      // status already says why
+  } else if (el) {
+    await el.play().catch(() => {});
+  }
+  try { await document.documentElement.requestFullscreen(); } catch { /* not allowed here: just hide the panel */ }
+  showPanel(false);
+}
+$('play').addEventListener('click', start);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) showPanel(true); });
+canvas.addEventListener('click', () => showPanel($('panel').classList.contains('hidden')));
+addEventListener('keydown', (e) => { if (e.key === 'Escape' || e.key === 'ContextMenu' || e.key === 'Backspace') showPanel(true); });
+if (audioUrl) playUrl(audioUrl, 'the audio').then((ok) => { if (ok) showPanel(false); else say('Press Play to start the sound'); });
+
 const say = (m) => { $('status').textContent = m; };
 
-$('mic').addEventListener('click', async () => {
+async function useMic() {
   try {
     ensureAudio(); stopSources();
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     voice.connect(audio.createMediaStreamSource(stream));
     say('Listening to the microphone');
-  } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); }
-});
+  } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
+}
+$('mic').addEventListener('click', () => useMic().catch(() => {}));
 
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
@@ -49,8 +87,7 @@ $('file').addEventListener('change', () => {
   el.play().then(() => say('Playing ' + f.name), () => say('Press play again; the browser blocked autoplay'));
 });
 
-$('fs').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()));
-addEventListener('keydown', (e) => { if (e.key === 'h') $('panel').classList.toggle('hidden'); });
+$('fs').addEventListener('click', () => document.documentElement.requestFullscreen().then(() => showPanel(false), () => {}));
 
 function persist() {
   Object.assign(settings, { face: $('face').value, color: $('color').value, glow: +$('glow').value, sens: +$('sens').value, gate: +$('gate').value });
