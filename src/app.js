@@ -373,6 +373,26 @@ function fit() {
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 }
 let last = performance.now(), blinkAt = 2, blink = 0;
+
+// The voice is measured and sent from a timer, not from the drawing loop: a browser stops the drawing loop in a
+// hidden tab, which would stop the other screens' mouths. A worker's timer is not slowed down in the background.
+let lastMouth = { open: 0, bright: 0.5, energy: 0 }, tickAt = performance.now();
+function tick() {
+  if (screenMode || !voice) return;
+  const now = performance.now(), dt = Math.min(0.1, (now - tickAt) / 1000);
+  tickAt = now;
+  voice.sens = settings.sens; voice.gate = settings.gate;
+  lastMouth = voice.update(dt);
+  if (ready && screensN > 0 && now - lastSend >= 66) {
+    const v = packMouth(lastMouth);
+    if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
+  }
+}
+try {
+  const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 33)'], { type: 'text/javascript' })));
+  w.onmessage = tick;
+} catch { setInterval(tick, 33); }
+
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
@@ -382,11 +402,7 @@ function frame(now) {
     for (const key of ['open', 'bright', 'energy']) shown[key] += (target[key] - shown[key]) * k;
     m = shown;
   } else if (voice) {
-    voice.sens = settings.sens; voice.gate = settings.gate; m = voice.update(dt);
-    if (ready && screensN > 0 && now - lastSend >= 66) {
-      const v = packMouth(m);
-      if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
-    }
+    m = lastMouth;                                     // measured by the timer below, which keeps running in a hidden tab
   }
   if (t > blinkAt) { blink = 1; blinkAt = t + 2 + Math.random() * 4; }
   blink = Math.max(0, blink - dt * 7);
