@@ -259,7 +259,7 @@ $('endshare').addEventListener('click', () => {
 });
 
 // display side
-let bannerTimer = 0;
+let bannerTimer = 0, linkLost = false, sadAmt = 0;    // linkLost: the screen cannot reach the main screen, so its face frowns
 let display = null, curEpoch = -1, lastState = -1;
 const follow = createFollow();                        // the mouths a screen shows: latest frame, eased, closed when the controller is gone or silent
 function showPairBox(code, msg) {
@@ -272,7 +272,7 @@ function startDisplayLink() {
   let again = 0;
   link = new Link(relayUrl, {
     open() {
-      clearTimeout(bannerTimer); $('banner').hidden = true;
+      clearTimeout(bannerTimer); $('banner').hidden = true; linkLost = false;
       setPlaying(true);                               // a display is a pure screen: awake while connected
       const s = mem.get(SCREEN_KEY);
       link.send(s ? { action: 'screen', session: s.session } : { action: 'register' });
@@ -303,7 +303,8 @@ function startDisplayLink() {
     },
     close() {
       if (!display) showPairBox('', 'Connecting… If this stays here, check that Funny Faces is still running on the computer and that the computer is awake.');
-      else { clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { $('banner').hidden = false; }, 2000); }
+      else { clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { $('banner').hidden = false; linkLost = true; }, 2000); }
+      follow.adminGone();                             // the mouth closes while nobody is sending
     },
     binary(data) { const f = parseMouth(data); if (f) follow.apply(f, performance.now()); },
   });
@@ -602,6 +603,8 @@ function draw(now) {
   let list, look, ms;
   if (screenMode) {                                   // follow what the main screen sent, smoothed between updates
     ms = follow.tick(dt, now);
+    sadAmt += ((linkLost ? 1 : 0) - sadAmt) * Math.min(1, dt * 3);   // ease into the frown and out of it
+    if (display) display.sad = sadAmt < 0.01 ? 0 : sadAmt;
     list = display && display.pumpkins; look = display;
   } else {
     list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
