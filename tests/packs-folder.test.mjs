@@ -172,3 +172,21 @@ test('the release zip and Docker image get the packs folder; only its README is 
   assert.ok(existsSync(new URL('../packs/README.txt', import.meta.url)));
   assert.match(f('.gitignore'), /^!packs\/README\.txt$/m);
 });
+
+test('the starter pack validates and its cat is a bounded, readable face', () => {
+  const pack = builtIn();
+  assert.equal(pack.faces.length, STARTER_PACK.faces.length);
+  const cat = pack.faces.find((f) => f.id === 'cat');
+  assert.ok(cat, 'cat face id is kept');
+  assert.ok(cat.layers.length >= 6 && cat.layers.length <= 9);
+  assert.equal(cat.layers.filter((l) => l.kind === 'mouth').length, 1);
+  const raw = STARTER_PACK.faces.find((f) => f.id === 'cat');
+  for (const l of raw.layers) {
+    const pts = l.kind === 'mouth' ? [...l.top, ...l.open] : l.points;
+    for (const [x, y] of pts) assert.ok(x >= 8 && x <= 92 && y >= 6 && y <= 94, `point ${x},${y} inside the safe area`);
+    if (l.kind === 'mouth') {
+      assert.equal(l.top.length, l.open.length);
+      assert.ok(Math.max(...l.open.map((p, i) => p[1] - l.top[i][1])) <= 35);
+    }
+  }
+});
