@@ -35,7 +35,7 @@ use the first address); the code is not accepted (it lasts 10 minutes, so reload
 
 The mouth uses nine Rhubarb-style shapes: rest, closed, teeth, open, wide open, rounded, puckered, teeth-on-lip and
 tongue-up. Live sound picks a shape from the spectrum in the browser, with no model and no download. An audio
-file (or `?audio=` link) is analysed once, in the browser, into a small track (one shape and one loudness digit
+file is analysed once, in the browser, into a small track (one shape and one loudness digit
 per 40 ms) that plays in sync with the sound. The "Singer focus" box favors the centre of the stereo mix, where
 the singer usually is. Shape logic is in `src/visemes.js`, tracks in `src/track.js`. The G and H shapes appear
 only in tracks that carry them; the live classifier uses the other seven.
