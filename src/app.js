@@ -16,7 +16,7 @@ import { applyOutput, loadScreenOutput, saveScreenOutput, screenAddress, createW
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage');
 const stage = new Stage(canvas);                       // takes the canvas's context: WebGL2, or 2D when that is missing
-const aspect = () => (canvas.width && canvas.height ? canvas.width / canvas.height : innerWidth / innerHeight);
+const aspect = () => innerWidth / innerHeight;                  // the stage fills the window (see Stage.fit)
 
 const settings = load(undefined, innerWidth / innerHeight);
 $('renderinfo').textContent = stage.mode === 'webgl2' ? 'Drawing with WebGL2: pumpkins can be skewed in perspective.'

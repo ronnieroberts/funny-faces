@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitize, load, save, resize, defaultPumpkins, DEFAULTS } from '../src/settings.js';
+import { sanitize, load, save, resize, arrange, defaultPumpkins, DEFAULTS } from '../src/settings.js';
+import { isValid, centroid, sizeOf } from '../src/quad.js';
 
 const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
 
@@ -24,7 +25,7 @@ test('at most eight pumpkins, each one cleaned up', () => {
   const s = sanitize({ pumpkins: Array.from({ length: 12 }, () => ({ voice: 'nope', trim: 99, scale: 0, color: 'red', face: 5 })) });
   assert.equal(s.pumpkins.length, 8);
   assert.equal(s.pumpkins[0].voice, 'full'); assert.equal(s.pumpkins[0].trim, 20);
-  assert.equal(s.pumpkins[0].scale, 0.2); assert.equal(s.pumpkins[0].color, '');
+  assert.equal(s.pumpkins[0].quad.length, 4); assert.equal(s.pumpkins[0].color, '');
   assert.equal(sanitize({ mode: 'nonsense' }).mode, 'sync');
   assert.equal(sanitize({ mode: 'random' }).mode, 'random');
 });
@@ -46,4 +47,30 @@ test('round trip through storage', () => {
 test('corrupt storage gives defaults', () => {
   const st = mem(); st.setItem('face-characters.settings.v1', '{nope');
   assert.deepEqual(load(st), DEFAULTS);
+});
+
+test('every pumpkin has a valid quad, defaulted from the grid', () => {
+  const s = sanitize({ pumpkins: [{}, {}, { quad: [[0, 0], [0, 0], [0, 0], [0, 0]] }] });
+  assert.ok(s.pumpkins.every((p) => isValid(p.quad)));
+  assert.ok(s.pumpkins[0].quad[0][0] < s.pumpkins[1].quad[0][0]);
+  assert.deepEqual(sanitize({ pumpkins: [{}, {}, {}] }).pumpkins[2].quad, s.pumpkins[2].quad);   // a bad quad gets the grid place
+});
+test('old dx, dy and scale settings become a quad', () => {
+  const A = 16 / 9, plain = sanitize({ pumpkins: [{}] }).pumpkins[0].quad;
+  const old = sanitize({ pumpkins: [{ dx: 0.5, dy: -0.25, scale: 0.5 }] }).pumpkins[0].quad;
+  const [c0, c1] = [centroid(plain, A), centroid(old, A)];
+  assert.ok(c1[0] > c0[0] && c1[1] < c0[1]);
+  assert.ok(Math.abs(sizeOf(old, A) / sizeOf(plain, A) - 0.5) < 1e-2);
+});
+test('a saved quad is kept, and group x, y, size place the default one', () => {
+  const quad = [[0.1, 0.1], [0.3, 0.1], [0.35, 0.4], [0.1, 0.4]];
+  assert.deepEqual(sanitize({ pumpkins: [{ quad }] }).pumpkins[0].quad, quad);
+  const left = sanitize({ x: -0.5, pumpkins: [{}] }).pumpkins[0].quad, mid = sanitize({ pumpkins: [{}] }).pumpkins[0].quad;
+  assert.ok(left[0][0] < mid[0][0]);
+});
+test('arrange resets the places, and a new count re-arranges', () => {
+  const moved = defaultPumpkins(3).map((p) => ({ ...p, quad: [[0.1, 0.1], [0.2, 0.1], [0.2, 0.3], [0.1, 0.3]] }));
+  assert.deepEqual(arrange(moved)[1].quad, defaultPumpkins(3)[1].quad);
+  assert.equal(arrange(moved)[0].face, moved[0].face);
+  assert.notDeepEqual(resize(moved, 4)[0].quad, moved[0].quad);
 });

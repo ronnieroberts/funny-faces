@@ -8,7 +8,8 @@ import { DEFAULTS } from '../src/settings.js';
 const face = builtIn().faces[0];
 
 const faceFor = () => face;
-const three = { ...DEFAULTS, pumpkins: [{ ...DEFAULTS.pumpkins[0] }, { ...DEFAULTS.pumpkins[0], dx: 0.5, color: '#00ff00' }, { ...DEFAULTS.pumpkins[0], enabled: false }] };
+const Q = [[0.1, 0.2], [0.4, 0.25], [0.45, 0.6], [0.05, 0.55]];
+const three = { ...DEFAULTS, pumpkins: [{ ...DEFAULTS.pumpkins[0] }, { ...DEFAULTS.pumpkins[0], quad: Q, color: '#00ff00' }, { ...DEFAULTS.pumpkins[0], enabled: false }] };
 
 test('state survives the trip and is re-validated', () => {
   const s = parseState(JSON.parse(JSON.stringify(buildState({ ...three, color: '#00ff00', size: 1.2 }, faceFor))));
@@ -16,7 +17,7 @@ test('state survives the trip and is re-validated', () => {
   assert.equal(s.size, 1.2);
   assert.equal(s.pumpkins.length, 2);                       // the disabled pumpkin is not sent
   assert.equal(s.pumpkins[0].face.id, face.id);
-  assert.equal(s.pumpkins[1].dx, 0.5);
+  assert.deepEqual(s.pumpkins[1].quad, Q);   // the warp travels to the screens
   assert.equal(s.pumpkins[1].color, '#00ff00');
   assert.ok(s.pumpkins[0].face.layers.length > 0);
 });
@@ -62,4 +63,13 @@ test('the relay is the server that served the page', async () => {
   assert.equal(await loadConfig(info, { protocol: 'file:', host: '' }), null);
   assert.equal(await loadConfig(async () => { throw new Error('offline'); }, { protocol: 'http:', host: 'x' }), null);
   assert.equal(await loadConfig(async () => ({ ok: false }), { protocol: 'http:', host: 'x' }), null);
+});
+
+test('a bad quad from the network is replaced, not drawn', () => {
+  const st = JSON.parse(JSON.stringify(buildState(three, faceFor)));
+  st.pumpkins[1].quad = [[0, 0], [NaN, 0], [1, 1], [0, 1]];
+  st.pumpkins[0].quad = [[-99, -99], [99, -99], [99, 99], [-99, 99]];
+  const s = parseState(st);
+  assert.equal(s.pumpkins[1].quad.length, 4);
+  assert.ok(s.pumpkins.every((p) => p.quad.flat().every((n) => Number.isFinite(n) && n >= -0.5 && n <= 1.5)));
 });
