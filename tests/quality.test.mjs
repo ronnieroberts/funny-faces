@@ -100,3 +100,9 @@ test('quality setting: valid values kept, anything else becomes auto', () => {
   assert.equal(sanitize({ adv: { quality: 5 } }).adv.quality, 'auto');
   assert.equal(sanitize({ sens: 3 }).adv.quality, 'auto');          // saved by an older version
 });
+
+test('tileKey: a sad face is a different picture, and a tiny change in sadness is not', () => {
+  const a = tileKey([], st, 384, false, 24, 1, 0, '#f80');
+  assert.equal(keyChanged(a, tileKey([], { ...st, sad: 0.5 }, 384, false, 24, 1, 0, '#f80')), true);
+  assert.equal(keyChanged(tileKey([], { ...st, sad: 0.5 }, 384, false, 24, 1, 0, '#f80'), tileKey([], { ...st, sad: 0.51 }, 384, false, 24, 1, 0, '#f80')), false);
+});
