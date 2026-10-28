@@ -104,7 +104,7 @@ server (microphone only, no extra screens).
 ## Kiosk and Fire TV use
 
 For a screen that only shows the faces, open `/screen` on it and pair it with the code (see above). It goes full screen
-with one press of the remote's Select button or a tap. Not yet tested on a real Fire TV.
+with one press of the remote's Select button or a tap.
 
 ## How the screens work
 
