@@ -1,6 +1,6 @@
 FROM node:22-alpine
 WORKDIR /app
-COPY package.json ./
+COPY package.json LICENSE ./
 COPY src ./src
 COPY server ./server
 COPY scripts ./scripts

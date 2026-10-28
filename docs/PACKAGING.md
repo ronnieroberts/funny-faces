@@ -31,6 +31,6 @@ a TV address and QR code. Status: option A (zip with Node inside), the QR code, 
   warnings until the app has a certificate or reputation. Until signed, the guide must show how to open it anyway.
 - Firewall: the first run triggers the OS "allow incoming connections" prompt. The app should explain it first.
 - Updates: a simple "new version available" check against the GitHub releases page; no automatic install at first.
-- Licence and distribution: the repo is private, so a public download needs a decision on where releases live.
+- License and distribution: the repo is private, so a public download needs a decision on where releases live.
 - Test on: Windows 11, an older Mac, a real Fire TV, a Wi-Fi network with device isolation turned on (the TV cannot
   reach the computer there; the app should detect and say so).
