@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/index.js';
-import { mask, openWs, rawHttp, sleep, textFrame, upgradeRequest } from './_wire.mjs';
+import { binFrame, mouthBytes, mask, openWs, rawHttp, sleep, textFrame, upgradeRequest } from './_wire.mjs';
 
 async function boot(opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ff-hard-'));
@@ -169,7 +169,7 @@ test('M3: a stalled screen under a flood of mouth messages costs bounded memory,
   try {
     const { screen, admin } = await pairUp(port);
     screen.sock.pause();                                                  // the TV stops reading
-    const msg = textFrame({ action: 'm', v: [1, 2, 3], n: 1 });
+    const msg = binFrame(mouthBytes(1, [1, 2, 3]));
     for (let round = 0; round < 40; round++) { admin.sock.write(Buffer.concat(Array(5000).fill(msg))); await sleep(5); }
     await sleep(500);
     assert.ok(app.stats().maxQueued < 64 * 1024, `queued ${app.stats().maxQueued} bytes for a stalled screen`);

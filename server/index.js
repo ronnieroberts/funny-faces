@@ -172,17 +172,17 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
       perIp.set(from, (perIp.get(from) || 0) + 1); sockets.add(ws);
       const id = randomBytes(8).toString('hex');
       let tokens = burst, last = Date.now(), proven = false;
-      relay.connect(id, (obj) => ws.send(JSON.stringify(obj), obj.type === 'm'), adminOk, from);
+      relay.connect(id, (m) => (Buffer.isBuffer(m) ? ws.send(m, true) : ws.send(JSON.stringify(m))), adminOk, from);   // only mouths are binary, and only mouths may be skipped
       ws.keepAlive(pingMs, pongMs);
       // A connection that never sends anything this relay understands is not a page: drop it. (One that has sent a valid
       // message may then sit quiet as long as it likes, like an unpaired control page.)
       const idle = setTimeout(() => { if (!proven) ws.close(1008); }, idleMs);
       idle.unref();
-      ws.on('message', (text) => {
+      ws.on('message', (data) => {
         const t = Date.now();
         tokens = Math.min(burst, tokens + (t - last) * rate / 1000); last = t;
         if (--tokens < 0) return ws.close(1008);                          // far faster than any page sends
-        try { if (relay.handle(id, JSON.parse(text))) proven = true; } catch { /* not JSON */ }
+        try { if (typeof data === 'string' ? relay.handle(id, JSON.parse(data)) : relay.handleBinary(id, data)) proven = true; } catch { /* not JSON */ }
       });
       ws.on('close', () => {
         clearTimeout(idle); sockets.delete(ws); relay.disconnect(id);

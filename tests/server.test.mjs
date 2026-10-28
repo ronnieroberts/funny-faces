@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { Relay } from '../server/relay.js';
 import { createApp } from '../server/index.js';
 import { sameOrigin, isLocal } from '../server/auth.js';
+import { mouthBytes } from './_wire.mjs';
 
 function fakeConn(relay, id, adminOk) {
   const got = [];
@@ -26,10 +27,11 @@ test('a screen pairs with a code and then follows the control page', () => {
   assert.equal(screen.at(-1).type, 'paired');
   r.handle('a', { action: 'state', state: { face: 'x' }, n: 1 });
   assert.deepEqual(screen.at(-1), { type: 'state', state: { face: 'x' }, n: 1 });
-  r.handle('a', { action: 'm', v: [1, 2, 3], n: 2 });
-  assert.deepEqual(screen.at(-1), { type: 'm', v: [1, 2, 3], n: 2 });
-  r.handle('a', { action: 'm', v: [1, 2, 300] });                       // bad values are dropped
-  assert.equal(screen.at(-1).n, 2);
+  const frame = mouthBytes(2, [1, 2, 3]);
+  assert.equal(r.handleBinary('a', frame), true);
+  assert.equal(screen.at(-1), frame);                                   // the very same bytes, not re-encoded
+  assert.equal(r.handleBinary('a', mouthBytes(3, [1, 2])), false);      // a bad length is dropped
+  assert.equal(screen.at(-1), frame);
   const late = fakeConn(r, 'late', false);                              // a screen that joins later gets the saved look
   r.handle('late', { action: 'screen', session: admin.at(-1).session });
   assert.equal(late.at(-1).type, 'state');
@@ -53,7 +55,8 @@ test('a code works once, wrong codes are counted, expired codes fail', () => {
 test('only a trusted connection may drive the faces', () => {
   const r = new Relay();
   const guest = fakeConn(r, 'g', false);
-  for (const action of ['pair', 'admin', 'state', 'm', 'end']) r.handle('g', { action, code: 'ABCDEF', state: {}, v: [0, 0, 0] });
+  for (const action of ['pair', 'admin', 'state', 'end']) r.handle('g', { action, code: 'ABCDEF', state: {} });
+  r.handleBinary('g', mouthBytes(1, [0, 0, 0]));
   assert.ok(guest.every((o) => o.error === 'not_admin'));
   assert.equal(guest.length, 5);
 });
@@ -151,9 +154,10 @@ test('end to end over real WebSockets: a screen shows a code, the control page p
     const paired = next(admin);
     admin.send(JSON.stringify({ action: 'pair', code }));
     assert.equal((await paired).type, 'paired');
-    const got = new Promise((ok) => { screen.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'm') ok(m); }; });
-    admin.send(JSON.stringify({ action: 'm', v: [9, 8, 7], n: 1 }));
-    assert.deepEqual((await got).v, [9, 8, 7]);
+    screen.binaryType = 'arraybuffer';
+    const got = new Promise((ok) => { screen.onmessage = (e) => { if (typeof e.data !== 'string') ok(new Uint8Array(e.data)); }; });
+    admin.send(mouthBytes(1, [9, 8, 7]));
+    assert.deepEqual([...await got], [0x4d, 0, 1, 9, 8, 7]);
     screen.close(); admin.close();
   } finally { await app.close(); }
 });

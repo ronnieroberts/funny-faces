@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from '../src/share.js';
+import { buildState, parseState, packMouth, mouthFrame, parseMouth, isNewer, isNewer16, changed } from '../src/share.js';
 import { builtIn } from '../src/packs.js';
 import { loadConfig } from '../src/relay.js';
 import { DEFAULTS } from '../src/settings.js';
@@ -34,15 +34,40 @@ test('hostile or broken state is refused or clamped', () => {
   const many = buildState({ ...DEFAULTS, pumpkins: Array.from({ length: 20 }, () => ({ ...DEFAULTS.pumpkins[0] })) }, faceFor);
   assert.equal(parseState(many).pumpkins.length, 8);        // never more than eight
 });
-test('mouth values pack to bytes and back, one mouth per pumpkin', () => {
+test('mouth values pack to bytes, one mouth per pumpkin', () => {
   assert.deepEqual(packMouth([{ open: 1, bright: 0, energy: 0.5 }]), [255, 0, 128]);
   assert.deepEqual(packMouth([{ open: 5, bright: -1, energy: 0 }, { open: 0, bright: 1, energy: 1 }]), [255, 0, 0, 0, 255, 255]);
-  assert.equal(unpackMouth([255, 0, 51])[0].open, 1);
-  assert.equal(unpackMouth([1, 2, 3, 4, 5, 6]).length, 2);
-  assert.equal(unpackMouth([1, 2]), null);
-  assert.equal(unpackMouth(new Array(27).fill(1)), null);   // nine pumpkins is too many
-  assert.equal(unpackMouth([1, 2, 300]), null);
-  assert.equal(unpackMouth('abc'), null);
+});
+test('a mouth frame is 0x4D, a 16 bit sequence, then three bytes per pumpkin, and parses back', () => {
+  const f = mouthFrame(0x1234, [255, 0, 51, 1, 2, 3]);
+  assert.deepEqual([...f], [0x4d, 0x12, 0x34, 255, 0, 51, 1, 2, 3]);
+  const p = parseMouth(f.buffer);                                     // what a browser hands over: an ArrayBuffer
+  assert.equal(p.n, 0x1234);
+  assert.equal(p.mouths.length, 2);
+  assert.equal(p.mouths[0].open, 1);
+  assert.equal(p.mouths[0].energy, 51 / 255);
+  assert.equal(parseMouth(f).n, 0x1234);                              // a Uint8Array works too
+  assert.equal(mouthFrame(65536 + 7, [0, 0, 0])[2], 7);               // the number wraps
+  assert.equal(parseMouth(mouthFrame(1, new Array(24).fill(1))).mouths.length, 8);
+});
+test('bad mouth frames are refused', () => {
+  assert.equal(parseMouth(new Uint8Array([0x4d, 0, 1, 1, 2]).buffer), null);          // length
+  assert.equal(parseMouth(new Uint8Array([0x4d, 0, 1]).buffer), null);                // no pumpkin
+  assert.equal(parseMouth(new Uint8Array([0x4e, 0, 1, 1, 2, 3]).buffer), null);       // type
+  assert.equal(parseMouth(mouthFrame(1, new Array(27).fill(1))), null);               // nine pumpkins
+  assert.equal(parseMouth('abc'), null);
+  assert.equal(parseMouth(null), null);
+});
+test('the 16 bit sequence is compared across the wrap', () => {
+  assert.equal(isNewer16(5, 4), true);
+  assert.equal(isNewer16(4, 4), false);
+  assert.equal(isNewer16(3, 4), false);
+  assert.equal(isNewer16(0, 65535), true);                            // wrapped
+  assert.equal(isNewer16(2, 65534), true);
+  assert.equal(isNewer16(65535, 0), false);                           // an old one from before the wrap
+  assert.equal(isNewer16(65530, 3), false);
+  assert.equal(isNewer16(0, -1), true);                               // nothing seen yet
+  assert.equal(isNewer16(40000, 0), false);                           // more than half the range ahead counts as behind
 });
 test('old messages are ignored, unnumbered ones accepted', () => {
   assert.equal(isNewer(5, 4), true);

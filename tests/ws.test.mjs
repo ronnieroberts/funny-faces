@@ -125,9 +125,32 @@ test('invalid UTF-8 in a text message closes with 1007 and is not delivered', ()
   assert.equal(closeCode(b.socket), 1007);
 });
 
-test('binary frames are not spoken here: close 1003', () => {
-  const { socket, feed } = setup(); feed(mask(2, 'x'));
-  assert.equal(closeCode(socket), 1003);
+test('a binary message arrives as a Buffer, whole, even when it is not valid UTF-8', () => {
+  const { feed, got, socket } = setup();
+  feed(mask(2, Buffer.from([0x4d, 0xff, 0xfe, 1, 2, 3])), mask(2, Buffer.from([1, 2]), { fin: false }), mask(0, Buffer.from([0xff]), { fin: true }));
+  assert.deepEqual(got.messages.map((m) => [...m]), [[0x4d, 0xff, 0xfe, 1, 2, 3], [1, 2, 0xff]]);
+  assert.ok(Buffer.isBuffer(got.messages[0]));
+  assert.equal(closeCode(socket), null);
+});
+
+test('a binary message over the small binary cap closes with 1009, also when it is fragmented', () => {
+  const a = setup(); a.feed(mask(2, Buffer.alloc(65)));
+  assert.equal(closeCode(a.socket), 1009); assert.equal(a.got.messages.length, 0);
+  const b = setup(); b.feed(mask(2, Buffer.alloc(40), { fin: false }), mask(0, Buffer.alloc(40), { fin: true }));
+  assert.equal(closeCode(b.socket), 1009);
+  const c = setup(); c.feed(mask(2, Buffer.alloc(64)));
+  assert.equal(closeCode(c.socket), null); assert.equal(c.got.messages.length, 1);
+});
+
+test('a text frame cannot be continued as binary or the other way round', () => {
+  const a = setup(); a.feed(mask(1, 'x', { fin: false }), mask(2, 'y'));
+  assert.equal(closeCode(a.socket), 1002);
+});
+
+test('send: a Buffer goes out as an unmasked binary frame', () => {
+  const { ws, socket } = setup();
+  ws.send(Buffer.from([0x4d, 0, 1, 9, 8, 7]));
+  assert.deepEqual([...socket.written[0]], [0x82, 6, 0x4d, 0, 1, 9, 8, 7]);
 });
 
 test('ping is answered with pong and is not a message; an unsolicited pong is ignored', () => {

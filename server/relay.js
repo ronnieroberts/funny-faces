@@ -1,19 +1,28 @@
 // Pairs display screens with the control page and forwards what the control page sends. In memory, one process.
-// Same JSON protocol the page has always spoken: {action: register | pair | admin | screen | state | m | end | ping}.
+// A dumb broadcast: the screen is a pure function of the latest state and the latest mouths. See docs/PROTOCOL.md.
+//
+// Control messages are JSON text frames, {action: register | pair | admin | screen | state | end | ping}:
 //   register  a screen asks for a 6 character code
 //   pair      the control page types that code; both sides get "paired"
 //   state     the face and look (rarely); the latest is kept so a screen that joins later gets it
-//   m         three mouth bytes, about 15 a second, forwarded to every paired screen
 //   ping      keeps a quiet connection counted as alive; no reply
-// Messages the server sends to a screen besides code/paired/state/m/ended/error:
+// Messages the server sends besides code/paired/state/ended/error:
 //   {type:'admin_gone'}  the control page for this screen's session has disconnected (also sent to a screen that
-//                        joins while nobody is controlling). Screens keep showing the last look.
+//                        joins while nobody is controlling). The screen eases its mouths closed and keeps the look.
 //   {type:'admin_back'}  a control page has connected to the session again.
+//
+// Mouths are the only binary message, about 15 a second, control page to server and server to screens, identical bytes:
+//   byte 0      0x4D ('M')
+//   bytes 1-2   sequence number, unsigned 16 bit big endian, wraps; a screen keeps a frame only if it is newer (wrap aware)
+//   then 3 bytes per pumpkin, 1 to 8 pumpkins: open, bright, energy, each 0..255
+// So a frame is 3 + 3k bytes (6 for one pumpkin, 27 for eight). The server checks the length and the type byte and forwards
+// the bytes untouched to every screen of the session; it never decodes the values.
 import { randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';     // no 0/O, 1/I/L
 const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 200000, MAX_ATTEMPTS = 10, TRY_WINDOW = 600;
-const ADMIN_ACTIONS = new Set(['pair', 'admin', 'state', 'm', 'end']);
+const ADMIN_ACTIONS = new Set(['pair', 'admin', 'state', 'end']);
+const MOUTH_TYPE = 0x4D, MAX_MOUTH_PUMPKINS = 8;
 const MAX_SESSIONS = 1000;
 
 const normalize = (code) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -75,6 +84,21 @@ export class Relay {
     if (!Object.hasOwn(ACTIONS, action)) return false;           // never look a stranger's word up on a prototype
     c.valid = true;
     if (ACTIONS[action]) ACTIONS[action].call(this, id, c, body);
+    return true;
+  }
+
+  /** A binary message from a connection: a mouth frame. Returns true when it was one (the connection has proved itself). */
+  handleBinary(id, bytes) {
+    const c = this.conns.get(id);
+    if (!c) return false;
+    if (!c.adminOk) { this._error(c, 'not_admin'); return false; }
+    const n = bytes.length;
+    if (bytes[0] !== MOUTH_TYPE || n < 6 || n > 3 + 3 * MAX_MOUTH_PUMPKINS || n % 3) return false;
+    c.valid = true;
+    if (c.role !== 'admin' || !c.session) return true;
+    const screens = this._screens(c.session);
+    if (!screens.length) this._send(c, { type: 'screens', n: 0 });
+    else for (const s of screens) this._send(s, bytes);                  // the same Buffer for every screen
     return true;
   }
 
@@ -173,13 +197,6 @@ export class Relay {
     this._fanOut(c.session, { type: 'state', state: st, ...seq(body) });
   }
 
-  mouth(id, c, body) {
-    const v = body.v;
-    if (c.role !== 'admin' || !c.session || !Array.isArray(v) || !v.length || v.length % 3 || v.length > 24 || !v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) return;
-    if (!this._screens(c.session).length) return this._send(c, { type: 'screens', n: 0 });
-    this._fanOut(c.session, { type: 'm', v, ...seq(body) });
-  }
-
   end(id, c) {
     if (c.role !== 'admin' || !c.session) return;
     this._fanOut(c.session, { type: 'ended' });
@@ -191,5 +208,5 @@ export class Relay {
 // What a word from the network may ask for. Own properties only (Object.hasOwn), so '__proto__' and 'constructor' mean nothing.
 const ACTIONS = Object.assign(Object.create(null), {
   register: Relay.prototype.register, pair: Relay.prototype.pair, admin: Relay.prototype.admin, screen: Relay.prototype.screen,
-  state: Relay.prototype.state, m: Relay.prototype.mouth, end: Relay.prototype.end, ping: null,
+  state: Relay.prototype.state, end: Relay.prototype.end, ping: null,
 });

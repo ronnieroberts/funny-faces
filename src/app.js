@@ -9,7 +9,8 @@ import { drag, scale, nudge } from './layout.js';
 import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
 import { createEditor } from './editor.js';
 import { Link, loadConfig } from './relay.js';
-import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
+import { buildState, parseState, packMouth, mouthFrame, parseMouth, isNewer, changed } from './share.js';
+import { createFollow } from './screenfollow.js';
 import { captureTabAudio, tabAudioSupported, TAB_AUDIO_MESSAGES } from './tabaudio.js';
 import { applyOutput, loadScreenOutput, saveScreenOutput, screenAddress, createWakeLock, awakeMessage } from './output.js';
 
@@ -199,7 +200,7 @@ let relayUrl = null, link = null;
 
 // main screen side
 let admin = mem.get(ADMIN_KEY);                         // {session, key} once a screen has been paired
-let ready = false, screensN = 0, seq = 0, pendingCode = '', shareTimer = 0, sentMouth = null, lastSend = 0;
+let ready = false, screensN = 0, seq = 0, mouthSeq = 0, pendingCode = '', shareTimer = 0, sentMouth = null, lastSend = 0;
 const epoch = Math.floor(Math.random() * 2 ** 30);
 const sayScreens = (m) => { $('screenstatus').textContent = m; };
 function screensText() {
@@ -258,8 +259,8 @@ $('endshare').addEventListener('click', () => {
 
 // display side
 let bannerTimer = 0;
-let display = null, curEpoch = -1, lastState = -1, lastMouthN = -1;
-let target = [], shown = [];
+let display = null, curEpoch = -1, lastState = -1;
+const follow = createFollow();                        // the mouths a screen shows: latest frame, eased, closed when the controller is gone or silent
 function showPairBox(code, msg) {
   $('pairbox').hidden = false;
   $('paircode').textContent = code ? code.slice(0, 3) + ' ' + code.slice(3) : '';
@@ -287,15 +288,14 @@ function startDisplayLink() {
       } else if (m.type === 'state') {
         const st = parseState(m.state);
         if (!st) return;
-        if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; lastMouthN = -1; }
+        if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; follow.reset(); }
         if (!isNewer(m.n, lastState)) return;
         if (Number.isInteger(m.n)) lastState = m.n;
         display = st; $('pairbox').hidden = true;
-      } else if (m.type === 'm') {
-        const v = unpackMouth(m.v);
-        if (!v || !isNewer(m.n, lastMouthN)) return;
-        if (Number.isInteger(m.n)) lastMouthN = m.n;
-        target = v;
+      } else if (m.type === 'admin_gone') {
+        follow.adminGone();
+      } else if (m.type === 'admin_back') {
+        follow.adminBack();
       } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
         mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
       }
@@ -304,6 +304,7 @@ function startDisplayLink() {
       if (!display) showPairBox('', 'Connecting… If this stays here, check that Funny Faces is still running on the computer and that the computer is awake.');
       else { clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { $('banner').hidden = false; }, 2000); }
     },
+    binary(data) { const f = parseMouth(data); if (f) follow.apply(f, performance.now()); },
   });
   link.start();
 }
@@ -566,8 +567,11 @@ function tick() {
   tickAt = now;
   lastMouths = mouths.update(source.frame(), dt, now / 1000, settings, enabledPumpkins());
   if (ready && screensN > 0 && now - lastSend >= 66) {
-    const v = packMouth(lastMouths);
-    if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
+    const v = packMouth(lastMouths), since = now - lastSend;
+    // Send when it changed, and every 400 ms while a mouth is open even if it did not (a held vowel): a screen closes a mouth it has not heard about for 1.5 s.
+    if (changed(sentMouth, v) || (since >= 400 && v.some((x, i) => i % 3 !== 1 && x > 0))) {
+      link.send(mouthFrame(mouthSeq, v)); mouthSeq = (mouthSeq + 1) & 0xffff; sentMouth = v; lastSend = now;
+    }
   }
 }
 try {
@@ -591,12 +595,8 @@ function draw(now) {
   const t = now / 1000;
   let list, look, ms;
   if (screenMode) {                                   // follow what the main screen sent, smoothed between updates
-    const k = Math.min(1, dt * 18);
-    shown = target.map((m, i) => {
-      const s = shown[i] || m;
-      return { open: s.open + (m.open - s.open) * k, bright: s.bright + (m.bright - s.bright) * k, energy: s.energy + (m.energy - s.energy) * k };
-    });
-    list = display && display.pumpkins; look = display; ms = shown;
+    ms = follow.tick(dt, now);
+    list = display && display.pumpkins; look = display;
   } else {
     list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
     look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;

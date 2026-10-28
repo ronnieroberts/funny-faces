@@ -1,4 +1,4 @@
-// A small WebSocket server side (RFC 6455): text messages only, which is all the page sends.
+// A small WebSocket server side (RFC 6455): text messages (JSON) and small binary messages (mouth frames).
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 
@@ -10,6 +10,7 @@ const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // MAX_FRAGMENTED, in at most MAX_FRAGMENTS pieces.
 export const LIMITS = {
   MAX_FRAME: 250000, MAX_FRAGMENTED: 64 * 1024, MAX_FRAGMENTS: 64,
+  MAX_BINARY: 64,                   // the only binary message is a mouth frame, 27 bytes at most: anything bigger is a stranger's
   MAX_BUFFERED: 1024 * 1024,        // a socket with this much unsent data is stalled: drop it
   MAX_BUFFERED_DISPOSABLE: 16 * 1024,   // mouth frames are skipped for a screen that is this far behind
 };
@@ -20,7 +21,7 @@ export class Socket extends EventEmitter {
   constructor(socket, limits = {}) {
     super();
     this.limits = { ...LIMITS, ...limits };
-    this.socket = socket; this.buf = Buffer.alloc(0); this.parts = []; this.partBytes = 0; this.closed = false;
+    this.socket = socket; this.buf = Buffer.alloc(0); this.parts = []; this.partBytes = 0; this.kind = 0; this.closed = false;
     this.alive = true; this.timers = [];
     socket.on('data', (d) => { this.alive = true; this._data(d); });
     socket.on('end', () => this._finish(true));               // the HTTP server keeps sockets half open: a peer that left sends no 'close'
@@ -28,17 +29,17 @@ export class Socket extends EventEmitter {
     socket.on('error', () => this._finish(true));
   }
 
-  /** Send a text message. With disposable, it is skipped (returns false) when this socket is already behind. */
-  send(text, disposable = false) {
+  /** Send a message: a string goes out as text, a Buffer as binary. With disposable, it is skipped (returns false) when this socket is already behind. */
+  send(data, disposable = false) {
     if (this.closed) throw new Error('closed');
     const queued = this.socket.writableLength || 0;
     if (queued > this.limits.MAX_BUFFERED) { this.terminate(); throw new Error('closed'); }   // stalled: do not hoard memory
     if (disposable && queued > this.limits.MAX_BUFFERED_DISPOSABLE) return false;
-    const body = Buffer.from(text), n = body.length;
+    const body = typeof data === 'string' ? Buffer.from(data) : data, n = body.length, op = typeof data === 'string' ? 0x81 : 0x82;
     let head;
-    if (n < 126) head = Buffer.from([0x81, n]);
-    else if (n < 65536) head = Buffer.from([0x81, 126, n >> 8, n & 255]);
-    else { head = Buffer.alloc(10); head[0] = 0x81; head[1] = 127; head.writeUInt32BE(n, 6); }
+    if (n < 126) head = Buffer.from([op, n]);
+    else if (n < 65536) head = Buffer.from([op, 126, n >> 8, n & 255]);
+    else { head = Buffer.alloc(10); head[0] = op; head[1] = 127; head.writeUInt32BE(n, 6); }
     this.socket.write(Buffer.concat([head, body]));
     return true;
   }
@@ -97,6 +98,7 @@ export class Socket extends EventEmitter {
         if (op === 0 && !this.parts.length) return this.close(1002);     // continuation of nothing
         if (op !== 0 && this.parts.length) return this.close(1002);      // new message in the middle of one
         if (len > L.MAX_FRAME) return this.close(1009);
+        if ((op === 2 || (op === 0 && this.kind === 2)) && this.partBytes + len > L.MAX_BINARY) return this.close(1009);
         if (!fin || this.parts.length) {                                 // fragmented: strict limits, counted as we go
           if (this.parts.length >= L.MAX_FRAGMENTS || this.partBytes + len > L.MAX_FRAGMENTED) return this.close(1009);
         }
@@ -116,14 +118,14 @@ export class Socket extends EventEmitter {
       }
       if (op === 9) { this.socket.write(Buffer.concat([Buffer.from([0x8a, len]), out])); continue; }
       if (op === 10) continue;
-      if (op === 2) return this.close(1003);                             // binary: not spoken here
+      if (op !== 0) this.kind = op;
       this.parts.push(out); this.partBytes += len;
       if (fin) {
-        const all = this.parts.length === 1 ? this.parts[0] : Buffer.concat(this.parts);
+        const all = this.parts.length === 1 ? this.parts[0] : Buffer.concat(this.parts), binary = this.kind === 2;
         this.parts = []; this.partBytes = 0;
-        let text;
-        try { text = decoder.decode(all); } catch { return this.close(1007); }
-        this.emit('message', text);
+        let msg = all;                                                   // binary: the Buffer as it came; text: a string
+        if (!binary) { try { msg = decoder.decode(all); } catch { return this.close(1007); } }
+        this.emit('message', msg);
       }
     }
   }
