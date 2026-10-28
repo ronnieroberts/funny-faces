@@ -1,8 +1,8 @@
 // Builds a download that needs no Node install: a zip holding the app, a copy of Node, a double-click launcher and a
 // plain-language README. One zip per operating system.
 //   node scripts/make-release.mjs --platform mac-arm64|mac-x64|win-x64|linux-x64 [--out release] [--node-binary <file>]
-// Without --node-binary it downloads the official Node build from nodejs.org (the same version as the one running this
-// script) and checks it against nodejs.org's published SHA-256 list before using it.
+// Without --node-binary it downloads the official Node build from nodejs.org (--node-version or FACES_NODE_VERSION, else
+// the version running this script) and checks it against nodejs.org's published SHA-256 list before using it.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,7 +22,7 @@ const spec = PLATFORMS[platform];
 if (!spec) { console.error('Use --platform with one of: ' + Object.keys(PLATFORMS).join(', ')); process.exit(1); }
 const out = resolve(arg('out', 'release'));
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-const nodeVersion = process.version;
+const nodeVersion = arg('node-version', process.env.FACES_NODE_VERSION || process.version);   // the Node bundled in the zip
 
 const LAUNCHERS = {
   mac: `#!/bin/bash
@@ -80,7 +80,7 @@ Everything stays on your own network. Nothing is sent to the internet.
 `;
 
 function download(url, to) {
-  execFileSync('curl', ['-fsSL', '--retry', '3', '-o', to, url], { stdio: 'inherit' });
+  execFileSync('curl', ['-fsSL', '--http1.1', '--retry', '5', '--retry-all-errors', '-o', to, url], { stdio: 'inherit' });
 }
 
 function fetchNode(tmp) {
