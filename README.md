@@ -55,6 +55,12 @@ overwrite a media file under the same name; give a new recording a new name.
 - Sources: microphone, or a local audio file.
 - Face, colour, glow and sensitivity are remembered in this browser.
 
+## Extra face packs
+
+`packs/christmas.json` has nine faces: four snowmen (classic, top hat, scarf, grumpy), two Christmas trees
+(plain and with lights) and three elves (elf, cheeky, jolly). Import it from the Faces tab. It is generated
+by `node scripts/make-christmas-pack.mjs`, which is also a handy example for making packs in code.
+
 ## Known limits
 
 - No pairing between devices, no shared library, no song pre-analysis.
