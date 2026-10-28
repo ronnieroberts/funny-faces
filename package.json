@@ -2,6 +2,7 @@
   "name": "funny-faces",
   "version": "1.0.1",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Talking faces for pumpkins and other characters, projected or shown on any screen.",
   "engines": { "node": ">=22" },
