@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The cat face now looks like a cat.
+
 ## 1.0.2
 
 1.0.1 was only the rename to Funny Faces; this is the first full release.
