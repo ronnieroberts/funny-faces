@@ -19,18 +19,18 @@ latest mouths, redrawn every frame. Everything is one WebSocket at `/ws` on the 
 ```
 byte 0      0x4D ('M')
 bytes 1-2   sequence number, unsigned 16 bit, big endian; wraps 65535 -> 0
-then        3 bytes per pumpkin, 1 to 8 pumpkins: open, bright, energy (each 0..255)
+then        3 bytes per face, 1 to 8 faces: open, bright, energy (each 0..255)
 ```
 
-Length is `3 + 3k` bytes: 6 for one pumpkin, 27 for eight. The server rejects anything else (wrong type byte, wrong length,
-nine pumpkins) and forwards valid frames to every screen of the session as the identical bytes, never decoding the values.
+Length is `3 + 3k` bytes: 6 for one face, 27 for eight. The server rejects anything else (wrong type byte, wrong length,
+nine faces) and forwards valid frames to every screen of the session as the identical bytes, never decoding the values.
 Binary messages over 64 bytes close the connection (1009). A screen keeps a frame only if its sequence number is newer than the
 last one, compared across the wrap (1 to 32767 steps ahead). Look (`state`) counters stay plain increasing integers.
 
 ## Freeze handling
 
 The screen eases its mouths closed when the server sends `admin_gone`, and when it has had no mouth frame for 1.5 seconds while
-a mouth was open. To keep a held vowel open, the control page resends the current mouth every 400 ms while any pumpkin's open or
+a mouth was open. To keep a held vowel open, the control page resends the current mouth every 400 ms while any face's open or
 energy is non-zero, even if unchanged. A quiet room sends nothing. `admin_back` (or any new frame) resumes.
 
 ## Size on the wire
@@ -38,7 +38,7 @@ energy is non-zero, even if unchanged. A quiet room sends nothing. `admin_back` 
 Including WebSocket framing (control page to server is masked: 6 byte header up to 125 bytes of payload; server to screen is
 unmasked: 2 byte header):
 
-| Pumpkins | Before (JSON) up / down | Now (binary) up / down |
+| Faces | Before (JSON) up / down | Now (binary) up / down |
 | --- | --- | --- |
 | 1 | 47 / 41 bytes | 12 / 8 bytes |
 | 8 | 124 / 118 bytes | 33 / 29 bytes |

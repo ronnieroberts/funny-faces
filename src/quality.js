@@ -34,7 +34,7 @@ export function tileKey(key, st, size, flame, hz, t, slot, color) {
   key[0] = quant(st.open, 64); key[1] = quant(st.bright, 64); key[2] = quant(st.blink, 16);
   key[3] = quant(st.energy, 32); key[4] = quant(st.alpha, 32); key[5] = size; key[6] = color;
   key[7] = flame ? Math.floor(t * hz + slot * 0.37) : 0;
-  key[8] = quant(st.glow, 32); key[9] = st.level | 0;
+  key[8] = quant(st.glow, 32); key[9] = st.level | 0; key[10] = quant(st.sad, 16);
   return key;
 }
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.3
+
+- A screen that loses its connection now frowns (the mouth closes and the face droops) until it reconnects.
+- The cat face now looks like a cat.
+- The control page now has one Faces tab (Play, Faces, Look, Advanced, Screens): pick a face with the chips at the top, then use the fold-out sections Look of this face, Position and size, Whole stage and Who talks. Which sections are open, and which face is picked, is remembered.
+- Adding a face no longer rearranges the faces already placed. "Line all faces up in a row" does that on request.
+- Own colour shows the shared colour until set, and "Use shared colour" clears it.
+- Touch: a "Finish editing" button while editing on the stage, and on phones the menu is a bottom sheet so the stage stays visible.
+- The page says "face" instead of "pumpkin" in its wording.
+- First-run help for the unsigned downloads: `READ ME FIRST.txt` and the README now give clear steps for the Mac "Not Opened" (Gatekeeper) message (Open Anyway in System Settings, or `xattr -dr com.apple.quarantine`), Windows SmartScreen and Linux (`chmod +x`), and say plainly that the app is unsigned because it is a hobby project and runs only on the local network.
+
 ## 1.0.2
 
 1.0.1 was only the rename to Funny Faces; this is the first full release.

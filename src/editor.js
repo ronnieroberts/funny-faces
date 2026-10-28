@@ -10,7 +10,8 @@ const CURSORS = { move: 'move', corner: 'crosshair', edge: 'ew-resize', rotate: 
  *  o.onMode(on): called when edit mode turns on or off. */
 export function createEditor(o) {
   const canvas = o.canvas, pointers = new Map();
-  let on = false, drag = null, pinch = 0;
+  let on = false, drag = null, pinch = 0, flashUntil = 0, flashIdx = 0;
+  const FLASH_MS = 1000;
 
   const aspect = () => canvas.width / canvas.height;
   const flags = () => ({ mirror: document.body.dataset.mirror === '1', flip: document.body.dataset.flip === '1' });
@@ -26,7 +27,7 @@ export function createEditor(o) {
     v = !!v;
     if (v === on) return;
     on = v; drag = null; pointers.clear(); canvas.style.cursor = '';
-    if (!on) o.overlay.getContext('2d').clearRect(0, 0, o.overlay.width, o.overlay.height);
+    if (!on) { flashUntil = 0; o.overlay.getContext('2d').clearRect(0, 0, o.overlay.width, o.overlay.height); }
     o.onMode(on);
   }
 
@@ -45,7 +46,7 @@ export function createEditor(o) {
     if (!on) return;
     const mine = pointers.get(e.pointerId);
     if (mine) { mine.x = e.clientX; mine.y = e.clientY; }
-    if (pointers.size === 2) {                                   // two fingers: pinch the selected pumpkin
+    if (pointers.size === 2) {                                   // two fingers: pinch the selected face
       const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
       if (pinch) setQuad(o.sel(), scaleQuad(o.pumpkins()[o.sel()].quad, d / pinch, aspect()));
       pinch = d;
@@ -69,7 +70,7 @@ export function createEditor(o) {
     if (!on) return;
     e.preventDefault();
     const p = where(e), hit = hitTest(quads(), o.sel(), p.x, p.y, canvas.width, canvas.height, p.k);
-    const i = hit ? hit.index : o.sel();                          // the pumpkin under the cursor, else the selected one
+    const i = hit ? hit.index : o.sel();                          // the face under the cursor, else the selected one
     if (i !== o.sel()) o.select(i);
     setQuad(i, scaleQuad(o.pumpkins()[i].quad, Math.exp(-e.deltaY * 0.0012), aspect()));
   }, { passive: false });
@@ -80,7 +81,7 @@ export function createEditor(o) {
     setOn,
     toggle() { setOn(!on); },
 
-    /** Arrows nudge, + and - zoom, R resets the skew, Tab picks the next pumpkin. Returns true if the key was used. */
+    /** Arrows nudge, + and - zoom, R resets the skew, Tab picks the next face. Returns true if the key was used. */
     key(e) {
       if (!on || e.metaKey || e.ctrlKey || e.altKey) return false;
       const list = o.pumpkins(), i = o.sel(), step = e.shiftKey ? 0.02 : 0.003, A = aspect() || 16 / 9;
@@ -98,9 +99,31 @@ export function createEditor(o) {
       return true;
     },
 
-    /** Draw outlines and the selected pumpkin's handles. Call every frame; it does nothing outside edit mode. */
+    /** Outside edit mode: flash a blue outline around face i for about a second, so you can tell which one was picked. */
+    flash(i) {
+      if (on) return;
+      flashIdx = i; flashUntil = performance.now() + FLASH_MS;
+      o.overlay.hidden = false;
+    },
+
+    /** Draw outlines and the selected face's handles. Call every frame; outside edit mode it only draws a flash. */
     draw() {
-      if (!on) return;
+      if (!on) {
+        if (!flashUntil) return;
+        const left = flashUntil - performance.now(), ov = o.overlay, w = canvas.width, h = canvas.height;
+        if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
+        const ctx = ov.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        const p = o.pumpkins()[flashIdx];
+        if (left <= 0 || !p || !p.enabled) { flashUntil = 0; ov.hidden = true; return; }
+        const k = w / (canvas.getBoundingClientRect().width || w);
+        ctx.beginPath(); p.quad.forEach(([x, y], n) => (n ? ctx.lineTo(x * w, y * h) : ctx.moveTo(x * w, y * h))); ctx.closePath();
+        ctx.globalAlpha = Math.min(1, left / 300);               // hold, then fade over the last 300 ms
+        ctx.fillStyle = 'rgba(76,194,255,.12)'; ctx.fill();
+        ctx.strokeStyle = BLUE; ctx.lineWidth = 4 * k; ctx.stroke();
+        ctx.globalAlpha = 1;
+        return;
+      }
       const w = canvas.width, h = canvas.height, ov = o.overlay;
       if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
       const ctx = ov.getContext('2d'), k = w / (canvas.getBoundingClientRect().width || w);

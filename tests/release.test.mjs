@@ -64,6 +64,30 @@ test('built zip contains LICENSE at its root and the notices mention it', (t) =>
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('READ ME FIRST.txt has the first-run steps for each OS', (t) => {
+  const have = (c) => spawnSync(c, ['-v'], { stdio: 'ignore' }).error === undefined;
+  if (!have('zip') || !have('unzip')) return t.skip('zip/unzip not available');
+  const dir = mkdtempSync(join(tmpdir(), 'ff-readme-'));
+  try {
+    writeFileSync(join(dir, 'node'), 'fake node binary'); writeFileSync(join(dir, 'node-license'), 'fake node license');
+    const work = join(dir, 'repo');
+    for (const f of ['scripts', 'src', 'server', 'packs', 'index.html', 'package.json', 'LICENSE']) cpSync(join(root, f), join(work, f), { recursive: true });
+    const text = (platform) => {
+      const out = join(dir, 'out-' + platform);
+      execFileSync(process.execPath, [join(work, 'scripts/make-release.mjs'), '--platform', platform, '--out', out,
+        '--node-binary', join(dir, 'node'), '--node-license', join(dir, 'node-license')], { cwd: work, stdio: 'ignore' });
+      const zip = readdirSync(out).find((f) => f.endsWith('.zip'));
+      return execFileSync('unzip', ['-p', join(out, zip), 'Funny Faces/READ ME FIRST.txt'], { encoding: 'utf8' });
+    };
+    const mac = text('mac-arm64');
+    for (const re of [/Not Opened/, /Privacy & Security/, /Open Anyway/, /xattr -dr com\.apple\.quarantine/, /not signed/, /hobby project/, /only on your local network/]) assert.match(mac, re);
+    const win = text('win-x64');
+    for (const re of [/More info/, /Run anyway/, /not signed/, /hobby project/]) assert.match(win, re);
+    const linux = text('linux-x64');
+    for (const re of [/chmod \+x "Start Funny Faces\.sh"|chmod \+x "start-funny-faces\.sh"/, /hobby project/]) assert.match(linux, re);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('Docker image includes LICENSE and .dockerignore does not exclude it', () => {
   assert.match(read('Dockerfile'), /^COPY .*\bLICENSE\b/m);
   assert.ok(!read('.dockerignore').split('\n').some((l) => /^\/?(LICENSE|\*)/i.test(l.trim())));
