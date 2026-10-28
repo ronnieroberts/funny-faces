@@ -1,15 +1,35 @@
 // Start Funny Faces:  node server/main.js     (settings come from environment variables, all optional)
 //   PORT=8765   HOST=0.0.0.0   FACES_DATA=./data   FACES_LAN_CONTROL=1 (let other devices open the control page, with a password)
 //   FACES_NO_BUILD=1 skips rebuilding the page (the Docker image and the downloads build it once)
+//   FACES_MAX_CONNECTIONS=256   FACES_MAX_WS_PER_IP=20   limits on open connections (all Docker clients share one address)
 //   FACES_OPEN=1 opens the control page in the default browser (the double-click launchers set it)
 import { execFile, execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createApp, lanUrls } from './index.js';
 
+// Work from any directory: the app's own folder is found from this file, not from where it was started.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT) || 8765;
-if (!process.env.FACES_NO_BUILD) execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'ignore' });
+if (!process.env.FACES_NO_BUILD) execFileSync(process.execPath, [join(root, 'scripts/build.mjs')], { cwd: root, stdio: 'ignore' });
+const limit = (name, dflt) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : dflt);
 const app = createApp({
-  port, host: process.env.HOST || '0.0.0.0', dataDir: process.env.FACES_DATA || './data', distDir: process.env.FACES_DIST || './dist',
+  port, host: process.env.HOST || '0.0.0.0', dataDir: process.env.FACES_DATA || join(root, 'data'), distDir: process.env.FACES_DIST || join(root, 'dist'),
   lanControl: /^(1|true|yes)$/i.test(process.env.FACES_LAN_CONTROL || ''),
+  maxConnections: limit('FACES_MAX_CONNECTIONS', 256), maxPerIp: limit('FACES_MAX_WS_PER_IP', 20),
+});
+
+// A stray error from one bad request or socket is logged, and the server keeps running for everyone else.
+process.on('uncaughtException', (e) => console.error(`[${new Date().toISOString()}] uncaught error (continuing):`, e && e.stack || e));
+process.on('unhandledRejection', (e) => console.error(`[${new Date().toISOString()}] unhandled rejection (continuing):`, e && e.stack || e));
+
+// docker stop and Ctrl+C: save the sessions (the save is normally delayed half a second) and close cleanly.
+let stopping = false;
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => {
+  if (stopping) return;
+  stopping = true;
+  const t = setTimeout(() => process.exit(0), 3000); t.unref();
+  app.close().then(() => process.exit(0));
 });
 try {
   await app.listen();

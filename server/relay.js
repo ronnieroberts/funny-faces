@@ -4,11 +4,17 @@
 //   pair      the control page types that code; both sides get "paired"
 //   state     the face and look (rarely); the latest is kept so a screen that joins later gets it
 //   m         three mouth bytes, about 15 a second, forwarded to every paired screen
+//   ping      keeps a quiet connection counted as alive; no reply
+// Messages the server sends to a screen besides code/paired/state/m/ended/error:
+//   {type:'admin_gone'}  the control page for this screen's session has disconnected (also sent to a screen that
+//                        joins while nobody is controlling). Screens keep showing the last look.
+//   {type:'admin_back'}  a control page has connected to the session again.
 import { randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';     // no 0/O, 1/I/L
 const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 200000, MAX_ATTEMPTS = 10, TRY_WINDOW = 600;
 const ADMIN_ACTIONS = new Set(['pair', 'admin', 'state', 'm', 'end']);
+const MAX_SESSIONS = 1000;
 
 const normalize = (code) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const same = (a, b) => {
@@ -21,7 +27,22 @@ export class Relay {
   /** sessions: optional saved {id: {key, state, ttl}} so screens survive a restart. onSessions(obj) is called on change. */
   constructor({ now = () => Math.floor(Date.now() / 1000), sessions = {}, onSessions = () => {} } = {}) {
     this.now = now; this.onSessions = onSessions;
-    this.tries = new Map(); this.conns = new Map(); this.codes = new Map(); this.sessions = new Map(Object.entries(sessions));
+    this.tries = new Map(); this.conns = new Map(); this.codes = new Map(); this.sessions = new Map();
+    this._load(sessions);
+  }
+
+  /** Saved sessions come from a file anyone with disk access could have damaged: keep only well-formed ones. */
+  _load(saved) {
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
+    for (const [id, v] of Object.entries(saved)) {
+      if (this.sessions.size >= MAX_SESSIONS) break;
+      if (!v || typeof v !== 'object' || typeof v.key !== 'string' || !v.key || !Number.isFinite(v.ttl)) continue;
+      let state = '';
+      if (typeof v.state === 'string' && v.state.length <= MAX_STATE) {
+        try { const o = JSON.parse(v.state); if (o && typeof o === 'object' && !Array.isArray(o)) state = v.state; } catch { /* corrupt look: drop it, keep the pairing */ }
+      }
+      this.sessions.set(id, { key: v.key, state, ttl: v.ttl });
+    }
   }
 
   /** ip is who is connecting: wrong codes are counted per address, so reconnecting does not reset the count. */
@@ -39,16 +60,22 @@ export class Relay {
     if (!c) return;
     if (c.code) this.codes.delete(c.code);
     if (c.role === 'screen' && c.session) this._tellAdmin(c.session);
+    if (c.role === 'admin' && c.session) {
+      const sess = this.sessions.get(c.session);
+      if (sess && sess.admin === id) { delete sess.admin; sess.gone = true; this._fanOut(c.session, { type: 'admin_gone' }); }
+    }
   }
 
+  /** Returns true when the message was one this relay speaks (so the connection has proved itself). */
   handle(id, body) {
     const c = this.conns.get(id);
     const action = body && typeof body === 'object' ? body.action : null;
-    if (!c || typeof action !== 'string') return;
-    if (ADMIN_ACTIONS.has(action) && !c.adminOk) return this._error(c, 'not_admin');
-    const fn = { register: this.register, pair: this.pair, admin: this.admin, screen: this.screen,
-      state: this.state, m: this.mouth, end: this.end }[action];
-    if (fn) fn.call(this, id, c, body);
+    if (!c || typeof action !== 'string') return false;
+    if (ADMIN_ACTIONS.has(action) && !c.adminOk) { this._error(c, 'not_admin'); return false; }
+    if (!Object.hasOwn(ACTIONS, action)) return false;           // never look a stranger's word up on a prototype
+    c.valid = true;
+    if (ACTIONS[action]) ACTIONS[action].call(this, id, c, body);
+    return true;
   }
 
   _send(c, obj) { try { c.send(obj); } catch { /* the socket is closing; disconnect() will tidy up */ } }
@@ -100,7 +127,7 @@ export class Relay {
     sess.ttl = this.now() + SESSION_TTL;
     this.sessions.set(session, sess);
     this._save();
-    c.role = 'admin'; c.session = session; this.tries.delete(c.ip); sess.admin = id;
+    c.role = 'admin'; c.session = session; this.tries.delete(c.ip); this._adminHere(session, sess, id);
     screen.role = 'screen'; screen.session = session; screen.code = null;
     this._send(screen, { type: 'paired', session });
     if (sess.state) this._send(screen, { type: 'state', state: JSON.parse(sess.state) });
@@ -110,7 +137,7 @@ export class Relay {
   admin(id, c, body) {
     const sess = this._checkSession(body.session, body.key);
     if (!sess) return this._error(c, 'unknown_session');
-    c.role = 'admin'; c.session = body.session; sess.admin = id;
+    c.role = 'admin'; c.session = body.session; this._adminHere(body.session, sess, id);
     sess.ttl = this.now() + SESSION_TTL;
     this._send(c, { type: 'ready', screens: this._screens(body.session).length });
   }
@@ -121,7 +148,14 @@ export class Relay {
     c.role = 'screen'; c.session = body.session;
     this._send(c, { type: 'paired', session: body.session });
     if (sess.state) this._send(c, { type: 'state', state: JSON.parse(sess.state) });
+    if (!sess.admin || !this.conns.has(sess.admin)) { sess.gone = true; this._send(c, { type: 'admin_gone' }); }
     this._tellAdmin(body.session);
+  }
+
+  /** This connection now controls the session. Screens that were told the controller left are told it is back. */
+  _adminHere(session, sess, id) {
+    sess.admin = id;
+    if (sess.gone) { delete sess.gone; this._fanOut(session, { type: 'admin_back' }); }
   }
 
   _tellAdmin(session) {
@@ -153,3 +187,9 @@ export class Relay {
     this._save();
   }
 }
+
+// What a word from the network may ask for. Own properties only (Object.hasOwn), so '__proto__' and 'constructor' mean nothing.
+const ACTIONS = Object.assign(Object.create(null), {
+  register: Relay.prototype.register, pair: Relay.prototype.pair, admin: Relay.prototype.admin, screen: Relay.prototype.screen,
+  state: Relay.prototype.state, m: Relay.prototype.mouth, end: Relay.prototype.end, ping: null,
+});
