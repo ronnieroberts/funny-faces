@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.3
+
 - A screen that loses its connection now frowns (the mouth closes and the face droops) until it reconnects.
 - The cat face now looks like a cat.
 - The control page now has one Faces tab (Play, Faces, Look, Advanced, Screens): pick a face with the chips at the top, then use the fold-out sections Look of this face, Position and size, Whole stage and Who talks. Which sections are open, and which face is picked, is remembered.
