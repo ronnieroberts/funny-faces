@@ -84,11 +84,14 @@ export function sanitize(o, A = DEFAULT_ASPECT) {
   return s;
 }
 
-/** Make the list n long, keeping what is there and adding sensible new ones. */
+/** Make the list n long. Faces already there keep everything (quad, skew, size, face, voice); removing drops the last ones.
+ *  Only new faces are placed: in their slot of the default row for the new count. To line everything up, call arrange(). */
 export function resize(pumpkins, n, A = DEFAULT_ASPECT, group = GROUP) {
   n = Math.max(1, Math.min(MAX_PUMPKINS, Math.round(n)));
-  const base = defaultPumpkins(Math.max(n, 2), A);
-  return arrange(Array.from({ length: n }, (_, i) => pumpkins[i] || base[i]), A, group);   // a new count means a new row
+  const kept = pumpkins.slice(0, n);
+  if (kept.length >= n) return kept;
+  const base = defaultPumpkins(Math.max(n, 2), A), slots = gridQuads(n, A, group);
+  return [...kept, ...Array.from({ length: n - kept.length }, (_, k) => ({ ...base[kept.length + k], quad: slots[kept.length + k] }))];
 }
 
 export function load(storage = globalThis.localStorage, A = DEFAULT_ASPECT) {

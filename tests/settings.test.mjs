@@ -68,9 +68,37 @@ test('a saved quad is kept, and group x, y, size place the default one', () => {
   const left = sanitize({ x: -0.5, pumpkins: [{}] }).pumpkins[0].quad, mid = sanitize({ pumpkins: [{}] }).pumpkins[0].quad;
   assert.ok(left[0][0] < mid[0][0]);
 });
-test('arrange resets the places, and a new count re-arranges', () => {
+test('arrange resets the places', () => {
   const moved = defaultPumpkins(3).map((p) => ({ ...p, quad: [[0.1, 0.1], [0.2, 0.1], [0.2, 0.3], [0.1, 0.3]] }));
   assert.deepEqual(arrange(moved)[1].quad, defaultPumpkins(3)[1].quad);
   assert.equal(arrange(moved)[0].face, moved[0].face);
-  assert.notDeepEqual(resize(moved, 4)[0].quad, moved[0].quad);
+});
+
+const MOVED = [[0.1, 0.1], [0.3, 0.12], [0.28, 0.4], [0.08, 0.35]];
+const custom = (n) => defaultPumpkins(n).map((p, i) => ({ ...p, quad: MOVED.map(([x, y]) => [+(x + i * 0.05).toFixed(4), y]) }));
+const inStage = (q) => q.every(([x, y]) => x >= 0 && x <= 1 && y >= 0 && y <= 1);
+
+test('adding faces keeps every existing quad', () => {
+  const before = custom(2), after = resize(before, 5);
+  assert.equal(after.length, 5);
+  before.forEach((p, i) => assert.deepEqual(after[i], p));
+});
+test('new faces land inside the stage, valid, and apart from each other', () => {
+  const after = resize(custom(1), 4);
+  after.slice(1).forEach((p) => { assert.ok(isValid(p.quad)); assert.ok(inStage(p.quad)); });
+  assert.notDeepEqual(after[1].quad, after[2].quad);
+  assert.deepEqual(after[3].quad, defaultPumpkins(4)[3].quad);
+});
+test('removing faces drops the last ones and leaves the rest alone', () => {
+  const before = custom(4), after = resize(before, 2);
+  assert.deepEqual(after, before.slice(0, 2));
+});
+test('arrange puts every face back in the default row', () => {
+  const after = arrange(custom(3));
+  after.forEach((p, i) => assert.deepEqual(p.quad, defaultPumpkins(3)[i].quad));
+});
+test('a resized list survives a save and load unchanged', () => {
+  const st = mem(), list = resize(custom(2), 4);
+  save({ ...DEFAULTS, pumpkins: list }, st);
+  assert.deepEqual(load(st).pumpkins.map((p) => p.quad), list.map((p) => p.quad));
 });
