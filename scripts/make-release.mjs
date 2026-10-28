@@ -1,8 +1,9 @@
 // Builds a download that needs no Node install: a zip holding the app, a copy of Node, a double-click launcher and a
 // plain-language README. One zip per operating system.
-//   node scripts/make-release.mjs --platform mac-arm64|mac-x64|win-x64|linux-x64 [--out release] [--node-binary <file>]
+//   node scripts/make-release.mjs --platform mac-arm64|mac-x64|win-x64|linux-x64 [--out release] [--node-binary <file> --node-license <file>]
 // Without --node-binary it downloads the official Node build from nodejs.org (--node-version or FACES_NODE_VERSION, else
 // the version running this script) and checks it against nodejs.org's published SHA-256 list before using it.
+// Node's own LICENSE (from that archive) goes into the zip as runtime/LICENSE-node.txt, with THIRD-PARTY-NOTICES.txt.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -51,6 +52,17 @@ export FACES_NO_BUILD=1 FACES_OPEN=1 FACES_DATA="\${XDG_DATA_HOME:-$HOME/.local/
 `,
 };
 
+const NOTICES = `THIRD-PARTY NOTICES
+===================
+
+Funny Faces itself has no third-party code: it is plain JavaScript with no dependencies.
+
+This download bundles Node.js (the program in the "runtime" folder), which runs Funny Faces. Node.js is not part of
+Funny Faces. It is distributed under its own licence, the full text of which is in runtime/LICENSE-node.txt
+(Node.js is copyright Node.js contributors and others; see that file for the terms and for the licences of the
+components Node.js itself includes). Node.js is unmodified, as published by the Node.js project at https://nodejs.org.
+`;
+
 const READ_ME = (launcher, os) => `FUNNY FACES ${version}
 ================
 
@@ -94,13 +106,17 @@ function fetchNode(tmp) {
   mkdirSync(dir);
   if (spec.ext === 'zip') execFileSync('unzip', ['-q', archive, '-d', dir]);
   else execFileSync('tar', ['-xf', archive, '-C', dir]);
-  return join(dir, `node-${nodeVersion}-${spec.node}`, spec.bin);
+  const base2 = join(dir, `node-${nodeVersion}-${spec.node}`);
+  return { binary: join(base2, spec.bin), license: join(base2, 'LICENSE') };
 }
 
 const tmp = mkdtempSync(join(tmpdir(), 'ff-release-'));
 try {
   execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'ignore' });
-  const nodeFile = arg('node-binary') ? resolve(arg('node-binary')) : fetchNode(tmp);
+  const fetched = arg('node-binary') ? null : fetchNode(tmp);
+  const nodeFile = fetched ? fetched.binary : resolve(arg('node-binary'));
+  const licenseFile = fetched ? fetched.license : arg('node-license') && resolve(arg('node-license'));
+  if (!licenseFile || !existsSync(licenseFile)) throw new Error('Node\'s LICENSE file is required in every download: pass --node-license <file> along with --node-binary');
   const name = `Funny Faces`, root = join(tmp, name), os = platform.split('-')[0];
   mkdirSync(join(root, 'app'), { recursive: true });
   mkdirSync(join(root, 'runtime'));
@@ -110,6 +126,8 @@ try {
   cpSync('package.json', join(root, 'app/package.json'));
   cpSync(nodeFile, join(root, 'runtime', basename(spec.bin)));
   chmodSync(join(root, 'runtime', basename(spec.bin)), 0o755);
+  cpSync(licenseFile, join(root, 'runtime', 'LICENSE-node.txt'));
+  writeFileSync(join(root, 'THIRD-PARTY-NOTICES.txt'), NOTICES.replace(/\n/g, os === 'win' ? '\r\n' : '\n'));
   const launcher = join(root, spec.launcher);
   writeFileSync(launcher, LAUNCHERS[os === 'win' ? 'win' : os === 'mac' ? 'mac' : 'linux']);
   chmodSync(launcher, 0o755);
