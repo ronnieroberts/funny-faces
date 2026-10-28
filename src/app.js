@@ -9,6 +9,7 @@ import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFac
 import { drag, scale, nudge } from './layout.js';
 import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
 import { createEditor } from './editor.js';
+import { UI_KEY, parseUi, setOpen, setSel, clampSel, nextChip, canAdd, canRemove, showTalk, selAfterRemove, hasNotice, chipLabel, faceLabel } from './ui.js';
 import { Link, loadConfig } from './relay.js';
 import { buildState, parseState, packMouth, mouthFrame, parseMouth, isNewer, changed } from './share.js';
 import { createFollow } from './screenfollow.js';
@@ -21,7 +22,7 @@ const stage = new Stage(canvas);                       // takes the canvas's con
 const aspect = () => innerWidth / innerHeight;                  // the stage fills the window (see Stage.fit)
 
 const settings = load(undefined, innerWidth / innerHeight);
-$('renderinfo').textContent = stage.mode === 'webgl2' ? 'Drawing with WebGL2: pumpkins can be skewed in perspective.'
+$('renderinfo').textContent = stage.mode === 'webgl2' ? 'Drawing with WebGL2: faces can be skewed in perspective.'
   : 'This browser has no WebGL2. Faces are drawn flat: they move, zoom and rotate, but skew has no perspective.';
 let packs = loadPacks();
 const params = new URLSearchParams(location.search);
@@ -34,7 +35,15 @@ function toast(m) {
 }
 
 // ---------------------------------------------------------------- settings
-let saveTimer = 0, sel = 0;                                   // sel: the pumpkin the Faces and Layout tabs are editing
+const mem = {
+  get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+  del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
+};
+// The Faces tab remembers which sections are open and which face was picked (never in the settings: see ui.js).
+let ui = parseUi(mem.get(UI_KEY), settings.pumpkins.length);
+const saveUi = () => mem.set(UI_KEY, ui);
+let saveTimer = 0, sel = ui.sel;                               // sel: the face the Faces tab is changing
 function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(settings), 250); scheduleShare(); }
 const pathOf = (el) => el.dataset.path.replace(/^pk\./, `pumpkins.${sel}.`);
 const getPath = (path) => path.split('.').reduce((a, k) => a[k], settings);
@@ -43,8 +52,9 @@ const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : 
 function syncControls() {
   for (const el of document.querySelectorAll('[data-path]')) {
     const v = getPath(pathOf(el));
-    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = el.type === 'color' && !v ? settings.color : v;   // no own colour: show the shared one, not black
   }
+  $('sharedc').disabled = !settings.pumpkins[sel].color;
   for (const o of document.querySelectorAll('output[data-for]')) o.textContent = fmt(getPath(pathOf({ dataset: { path: o.dataset.for } })));
   for (const k of ['size', 'x', 'y']) $(k).value = settings[k];
   document.body.dataset.mode = settings.mode;
@@ -65,10 +75,10 @@ const shownPacks = () => mergePacks(packs, folderPacks);
 let faces = allFaces(shownPacks());
 if (params.get('face')) settings.pumpkins[0].face = params.get('face');
 
-function thumb(entry) {
+function thumb(entry, color = settings.color) {
   const c = document.createElement('canvas');
   c.width = c.height = 120;
-  drawFace(c.getContext('2d'), entry.face, 120, { open: 0.5, bright: 0.3, blink: 0, energy: 0.2, color: settings.color, glow: 0.5, alpha: 1, time: 1 });
+  drawFace(c.getContext('2d'), entry.face, 120, { open: 0.5, bright: 0.3, blink: 0, energy: 0.2, color, glow: 0.5, alpha: 1, time: 1 });
   return c;
 }
 
@@ -93,7 +103,7 @@ function renderFaces() {
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'face' });
       b.setAttribute('aria-pressed', String(e.key === cur.key));
       b.append(thumb(e), document.createTextNode(e.face.name));
-      b.addEventListener('click', () => { settings.pumpkins[sel].face = e.key; persist(); renderFaces(); renderPumpkins(); });
+      b.addEventListener('click', () => { settings.pumpkins[sel].face = e.key; persist(); renderFaces(); renderChips(); });
       grid.append(b);
     }
     root.append(h, grid);
@@ -111,55 +121,99 @@ $('packfile').addEventListener('change', async () => {
     if (!savePacks(packs)) toast('Added, but this browser would not keep it');
     faces = allFaces(shownPacks());
     settings.pumpkins[sel].face = `${pack.id}/${pack.faces[0].id}`; persist();
-    renderFaces(); renderPumpkins(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
+    renderFaces(); renderChips(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
   } catch (e) { say(e.message || 'Could not add that pack'); }
 });
 
 loadFolderPacks().then(({ packs: found, problems }) => {      // the packs folder on the server, offered next to the built-in faces
   if (problems.length) $('packnotice').textContent = 'Some files in the packs folder were skipped:\n' + describeProblems(problems).join('\n');
+  $('packbadge').hidden = !hasNotice($('packnotice').textContent);   // visible even while "Look of this face" is folded
   if (!found.length) return;
-  folderPacks = found; faces = allFaces(shownPacks()); renderFaces(); renderPumpkins();
+  folderPacks = found; faces = allFaces(shownPacks()); renderFaces(); renderChips();
 });
 renderFaces();
 
-// ---------------------------------------------------------------- pumpkins: how many, which voice each listens to
-function renderPumpkins() {
-  $('count').value = String(settings.pumpkins.length);
-  sel = Math.min(sel, settings.pumpkins.length - 1);
-  const root = $('pumpkinlist');
-  root.replaceChildren();
-  settings.pumpkins.forEach((p, i) => {
-    const row = Object.assign(document.createElement('div'), { className: 'prow' });
-    const pick = Object.assign(document.createElement('button'), { type: 'button', className: 'pick', textContent: `${i + 1}. ${findFace(faces, p.face).face.name}` });
-    pick.setAttribute('aria-pressed', String(i === sel));
-    pick.title = 'Edit this pumpkin on the Faces and Layout tabs';
-    pick.addEventListener('click', () => { sel = i; syncControls(); renderFaces(); renderPumpkins(); });
-    const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: p.enabled, title: 'Show this pumpkin' });
-    on.addEventListener('change', () => { p.enabled = on.checked; persist(); });
-    const voice = document.createElement('select');
-    voice.className = 'voice'; voice.title = 'Which voices this pumpkin listens to (Voice bands mode)';
-    for (const [k, name] of Object.entries(VOICE_NAMES)) voice.append(Object.assign(document.createElement('option'), { value: k, textContent: name, selected: k === p.voice }));
-    voice.addEventListener('change', () => { p.voice = voice.value; persist(); });
-    const trim = Object.assign(document.createElement('input'), { type: 'range', min: -20, max: 20, step: 1, value: p.trim, title: 'Level: make this pumpkin more or less sensitive' });
-    trim.className = 'trim'; trim.addEventListener('input', () => { p.trim = +trim.value; persist(); });
-    row.append(on, pick, voice, trim);
-    root.append(row);
-  });
+// ---------------------------------------------------------------- the Faces tab: chips, sections, who talks
+for (const [k, name] of Object.entries(VOICE_NAMES)) $('voice').append(Object.assign(document.createElement('option'), { value: k, textContent: name }));
+const faceName = (i) => findFace(faces, settings.pumpkins[i].face).face.name;
+function updateChanging() {
+  const n = settings.pumpkins.length, who = faceLabel(sel, faceName(sel));
+  $('chiptitle').textContent = `Your faces (${n} of ${MAX_PUMPKINS})`;
+  $('changing').textContent = `Changing: ${who}`;
+  $('voicelabel').textContent = `Voice for ${who}`;
+  $('levellabel').textContent = `Level for ${who}`;
+  $('talktitle').textContent = `Who talks (${n} faces)`;
+  $('addface').disabled = !canAdd(n, MAX_PUMPKINS);
+  $('removeface').disabled = !canRemove(n);
+  $('sec-talk').hidden = !showTalk(n);
 }
-$('count').addEventListener('change', () => {
-  settings.pumpkins = resize(settings.pumpkins, +$('count').value, aspect(), settings);
-  renderPumpkins(); renderFaces(); persist();
+/** Pick a face. flash: outline it on the stage for a second. focus: keep the keyboard on the chips. */
+function selectFace(i, { flash = false, focus = false } = {}) {
+  sel = clampSel(i, settings.pumpkins.length);
+  ui = setSel(ui, sel, settings.pumpkins.length); saveUi();
+  syncControls(); renderFaces(); renderChips(focus);
+  if (flash && !screenMode) editor.flash(sel);
+}
+/** One radio chip per face (roving tabindex: only the picked one is a Tab stop, the arrows move between them). */
+function renderChips(focus = false) {
+  const list = settings.pumpkins, n = list.length;
+  sel = clampSel(sel, n);
+  const root = $('chips');
+  root.replaceChildren();
+  list.forEach((p, i) => {
+    const name = faceName(i);
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'chip' + (p.enabled ? '' : ' off') });
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(i === sel));
+    b.setAttribute('aria-label', faceLabel(i, name) + (p.enabled ? '' : ', hidden'));
+    b.tabIndex = i === sel ? 0 : -1;
+    b.append(thumb(findFace(faces, p.face), p.color || settings.color), document.createTextNode(chipLabel(i, name)));
+    b.addEventListener('click', () => selectFace(i, { flash: true, focus: true }));
+    b.addEventListener('keydown', (e) => {                    // arrows, Home and End only: every other key (E, Tab, Enter, Space) is left alone
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const j = nextChip(i, n, e.key);
+      if (j === null) return;
+      e.preventDefault(); selectFace(j, { flash: true, focus: true });
+    });
+    root.append(b);
+  });
+  updateChanging();
+  if (focus && root.children[sel]) root.children[sel].focus();
+  if (root.children[sel] && root.children[sel].scrollIntoView) root.children[sel].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+$('addface').addEventListener('click', () => {
+  const n = settings.pumpkins.length;
+  if (!canAdd(n, MAX_PUMPKINS)) return;
+  settings.pumpkins = resize(settings.pumpkins, n + 1, aspect(), settings);
+  persist(); selectFace(n, { flash: true }); toast(`Added face ${n + 1}`);
 });
-for (let n = 1; n <= MAX_PUMPKINS; n++) $('count').append(Object.assign(document.createElement('option'), { value: n, textContent: n === 1 ? '1 pumpkin' : `${n} pumpkins` }));
-renderPumpkins();
+$('removeface').addEventListener('click', () => {
+  const n = settings.pumpkins.length;
+  if (!canRemove(n)) return;
+  const who = faceLabel(sel, faceName(sel)), gone = sel;
+  settings.pumpkins = settings.pumpkins.filter((_, j) => j !== gone);
+  persist(); selectFace(selAfterRemove(gone, n)); toast(`Removed ${who}`);
+});
+$('shown').addEventListener('input', () => renderChips());     // after the data-path binder has stored it
+for (const id of ['ownc', 'color']) $(id).addEventListener('change', () => renderChips());   // the thumbnails use the colour
+$('sharedc').addEventListener('click', () => {
+  setPath(pathOf($('ownc')), '');                                // an empty own colour means "use the shared colour"
+  syncControls(); persist(); renderChips();
+});
+for (const d of document.querySelectorAll('details[data-sec]')) {   // fold state is stored apart from the settings, never through data-path
+  d.open = ui.open[d.dataset.sec];
+  d.addEventListener('toggle', () => { if (ui.open[d.dataset.sec] !== d.open) { ui = setOpen(ui, d.dataset.sec, d.open); saveUi(); } });
+}
+renderChips();
+syncControls();
 $('arrange').addEventListener('click', () => {
   settings.pumpkins = arrange(settings.pumpkins, aspect(), settings);
-  syncControls(); persist(); toast('Pumpkins re-arranged');
+  syncControls(); persist(); toast('Faces lined up');
 });
 $('resetskew').addEventListener('click', () => {
   const p = settings.pumpkins[sel];
   p.quad = resetSkew(p.quad, aspect());
-  persist(); toast('Skew reset');
+  persist(); toast('Face straightened');
 });
 
 // ---------------------------------------------------------------- screens: show the face on other displays
@@ -191,11 +245,6 @@ function screenKey(e) {                                  // on a display: M mirr
   return true;
 }
 addEventListener('pagehide', () => { wake.release(); });
-const mem = {
-  get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
-  del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
-};
 const ADMIN_KEY = 'face-characters.admin.v1', SCREEN_KEY = 'face-characters.screen.v1';
 let relayUrl = null, link = null;
 
@@ -453,8 +502,8 @@ $('fs').addEventListener('click', () => {
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
 
 // ---------------------------------------------------------------- size and move
-// With edit mode off, drag, pinch, wheel and arrows move and resize the whole group (every pumpkin's quad together).
-// With edit mode on, editor.js moves, warps and zooms one pumpkin.
+// With edit mode off, drag, pinch, wheel and arrows move and resize the whole group (every face's quad together).
+// With edit mode on, editor.js moves, warps and zooms one face.
 const groupQuads = () => settings.pumpkins.map((p) => p.quad);
 /** Place the whole group: x and y as before (-1 to 1 across the stage), size as a multiple of the default. */
 function setGroup({ x, y, size }) {
@@ -475,14 +524,15 @@ for (const k of ['size', 'x', 'y']) $(k).addEventListener('input', () => groupBy
 const editor = createEditor({
   canvas, overlay: $('overlay'), pumpkins: () => settings.pumpkins,
   sel: () => sel, changed: () => persist(),
-  select(i) { sel = i; syncControls(); renderFaces(); renderPumpkins(); },
+  select(i) { selectFace(i); },
   onMode(on) {
-    $('overlay').hidden = !on; $('edithint').hidden = !on; $('editbtn').textContent = on ? 'Finish editing' : 'Edit pumpkins';
-    canvas.classList.toggle('editing', on);
+    $('overlay').hidden = !on; $('edithint').hidden = !on; $('finishedit').hidden = !on; $('editbtn').textContent = on ? 'Finish editing' : 'Edit on the stage';
+    canvas.classList.toggle('editing', on); document.body.classList.toggle('editing-faces', on);
     if (on) { showMenu(false); toast('Editing: Esc or E to finish'); }
   },
 });
 $('editbtn').addEventListener('click', () => { if (!screenMode) editor.toggle(); });
+$('finishedit').addEventListener('click', () => { editor.setOn(false); showMenu(true); });   // touch has no Esc or E, and the menu tap is off while editing
 
 const pointers = new Map();
 let moved = 0, pinch = 0;
