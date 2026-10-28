@@ -192,3 +192,11 @@ test('starting on a taken port fails cleanly', async () => {
     await second.close().catch(() => {});
   } finally { await app.close(); }
 });
+
+test('/screen keeps the output options through the redirect and drops everything else', async () => {
+  const { app, port } = await boot();
+  try {
+    assert.equal((await get(port, '/screen')).headers.location, '/?screen');
+    assert.equal((await get(port, '/screen?mirror=1&flip=1&awake=0&x=2')).headers.location, '/?screen&mirror=1&flip=1&awake=0');
+  } finally { await app.close(); }
+});

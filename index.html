@@ -55,6 +55,18 @@
   #pairinput { text-transform:uppercase; letter-spacing:.2em; font-family:ui-monospace,Menlo,monospace; }
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000c; border:1px solid var(--line); padding:8px 14px; border-radius:20px; color:var(--fg); opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.on { opacity:1; }
+  /* Output: mirror (rear projection) flips left and right; flip turns the picture upside down (a rotation of 180
+     degrees, for an upside-down projector); both together are a plain top-to-bottom flip. The menu is never touched.
+     On a display screen the code and messages are turned the same way so they stay readable. */
+  body[data-mirror] #stage, body.screen[data-mirror] #pairbox, body.screen[data-mirror] #banner { transform:scaleX(-1); }
+  body[data-flip] #stage, body.screen[data-flip] #pairbox, body.screen[data-flip] #banner { transform:scale(-1,-1); }
+  body[data-mirror][data-flip] #stage, body.screen[data-mirror][data-flip] #pairbox, body.screen[data-mirror][data-flip] #banner { transform:scaleY(-1); }
+  body.screen[data-mirror] #toast { transform:translateX(-50%) scaleX(-1); }
+  body.screen[data-flip] #toast { transform:translateX(-50%) scale(-1,-1); }
+  body.screen[data-mirror][data-flip] #toast { transform:translateX(-50%) scaleY(-1); }
+  body.screen[data-flip] #toast { bottom:auto; top:24px; }
+  body.screen[data-flip] #banner { bottom:auto; top:0; }
+  .check { display:flex; gap:8px; align-items:center; color:var(--fg); }
 </style>
 </head>
 <body>
@@ -125,6 +137,12 @@
     <label>Color <input id="color" type="color" data-path="color"></label>
     <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05" data-path="glow"></label>
     <label>Resting brightness <small>(pumpkins that are not talking)</small> <output data-for="adv.idleDim"></output><input type="range" min="0" max="1" step="0.05" data-path="adv.idleDim"></label>
+    <h2>Output (this device only)</h2>
+    <label class="check"><input type="checkbox" data-path="output.mirror"> Mirror (rear projection)</label>
+    <label class="check"><input type="checkbox" data-path="output.flip"> Flip upside down</label>
+    <label class="check"><input type="checkbox" data-path="output.keepAwake"> Keep the screen awake</label>
+    <small id="awakestatus" role="status"></small>
+    <small>These apply to this page only. A TV or projector set up on the Screens tab has its own (keys M and F on that screen).</small>
   </section>
 
   <section class="pane" data-pane="advanced">
@@ -148,6 +166,8 @@
         <div id="qr"></div>
         <small>Or scan this with a phone to read the address, then type it into the TV.</small>
         <small id="tvother"></small>
+        <label class="check"><input type="checkbox" id="tvmirror"> This screen is behind a rear-projection screen (mirror)</label>
+        <label class="check"><input type="checkbox" id="tvflip"> This projector is upside down (flip)</label>
       </div>
       <label>Code <input id="pairinput" type="text" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
       <button id="pairbtn" type="button" class="primary">Add screen</button>
