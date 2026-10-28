@@ -6,28 +6,28 @@ several screens at once. Everything runs on your own computer and home network; 
 
 ## Quick start for families
 
-You need a Windows or Mac computer, Chrome, and (for a TV) any TV or Fire TV on the same Wi-Fi. About 10 minutes.
+You need a Windows or Mac computer, Chrome, and (for a TV) any TV or Fire TV on the same Wi-Fi. About 5 minutes.
 
-1. **Get the files.** On the project page click the green **Code** button, then **Download ZIP**, and unzip it
-   (double-click the ZIP). A ready-made app that skips steps 2 to 4 is planned.
-2. **Install Node.js** (the small helper program that runs Funny Faces). Go to https://nodejs.org, click the big
-   **LTS** download, open it and click Next through the installer.
-3. **Open a command window in the unzipped folder.**
-   - Mac: open **Terminal** (press Command+Space, type Terminal), type `cd ` (with a space), drag the unzipped
-     folder into the window, press Return.
-   - Windows: open the unzipped folder, click the address bar at the top, type `cmd` and press Enter.
-4. **Type `npm start` and press Enter.** After a few seconds it prints two web addresses. **Leave this window
-   open**: closing it stops Funny Faces. If the computer asks to allow network access, choose **Allow**.
-5. **On this computer**, open Chrome and go to the first address (`http://localhost:8765/`). Press **Use
-   microphone**, say yes when Chrome asks, and speak. The mouth should move.
-6. **To use a TV or projector too**, open the TV's web browser (on a Fire TV: Silk) and type the second
-   address, like `http://192.168.1.23:8765/screen`. The TV shows a 6-character code.
-7. On the computer, open the **Screens** tab, type the code, and press **Add screen**. The face appears on the TV.
+**Easiest: the download with everything inside** (no installing anything)
+1. On the project's **Releases** page download the zip for your computer (`mac-arm64` for newer Macs, `mac-x64` for older
+   Intel Macs, `win-x64` for Windows) and unzip it.
+2. Open the unzipped **Funny Faces** folder and double-click **Start Funny Faces**. The first time, Mac and Windows warn
+   about a download from an unknown developer; `READ ME FIRST.txt` in the folder shows how to continue past it.
+3. A window with two web addresses opens, and Chrome opens the control page. **Leave the window open**: closing it stops
+   Funny Faces. If the computer asks to allow network access, choose **Allow**.
+4. In Chrome press **Use microphone**, say yes, and talk. The bar moves and the mouth should too.
+5. **To use a TV or projector too**, open the **Screens** tab: it shows an address and a QR code. Open the TV's web
+   browser (on a Fire TV: Silk) and type that address. The TV shows a 6-character code.
+6. Type the code into the Screens tab and press **Add screen**. The face appears on the TV.
 
-If something goes wrong: the TV page says it cannot connect (allow Funny Faces or "node" in the computer's
-firewall, and make sure the computer is awake and on the same Wi-Fi as the TV); the window says Funny Faces is
-already running (it is: use the first address); the code is not accepted (it lasts 10 minutes, so reload the TV
-page for a new one).
+**If you only have the source code** (a ZIP of this project, or a clone): install Node.js 22 or newer from
+https://nodejs.org (the **LTS** download), open a command window in the folder (Mac: Terminal, type `cd ` and drag the
+folder in; Windows: click the folder's address bar, type `cmd`, Enter), type `npm start` and press Enter. Then continue
+from step 3 above.
+
+If something goes wrong: the TV page says it cannot connect (allow Funny Faces or "node" in the computer's firewall, and
+make sure the computer is awake and on the same Wi-Fi as the TV); the window says Funny Faces is already running (it is:
+use the first address); the code is not accepted (it lasts 10 minutes, so reload the TV page for a new one).
 
 ## Notes for tinkerers
 
@@ -123,6 +123,13 @@ by `node scripts/make-christmas-pack.mjs`, which is also a handy example for mak
 - One face at a time for now; no shared library.
 - Music mixed into the input moves the mouth too. Separating voices needs a model (next step).
 - Safari on iOS needs a tap before audio starts and cannot capture tab audio.
+
+## Making the downloads
+
+`node scripts/make-release.mjs --platform mac-arm64` (or `mac-x64`, `win-x64`, `linux-x64`) builds one zip in `release/`: the app, a copy of
+Node downloaded from nodejs.org and checked against its published SHA-256, a double-click launcher and a plain-language
+READ ME FIRST. Pushing a tag like `v1.0.1` runs `.github/workflows/release.yml`, which builds all four and attaches them to a
+GitHub release. The downloads are not code-signed yet, hence the warnings described above.
 
 ## Tests
 

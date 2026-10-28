@@ -32,6 +32,13 @@
   .face canvas { width:100%; aspect-ratio:1; border-radius:6px; background:#000; }
   #status, small { color:var(--muted); }
   body.screen #nav { display:none; }
+  #firsthint { margin:0 0 8px; padding-left:1.2em; }
+  #meter { display:block; height:10px; background:#2a2a2a; border-radius:5px; overflow:hidden; margin-top:4px; }
+  #meter i { display:block; height:100%; width:0; background:var(--accent, #e8741a); }
+  #tvurl { font-size:1.4em; font-weight:700; word-break:break-all; margin:4px 0; }
+  #qr svg { width:180px; height:180px; border-radius:6px; }
+  #banner { position:fixed; left:0; right:0; bottom:0; padding:10px; text-align:center; background:#000c; color:#fff; font-size:3vh; pointer-events:none; }
+  #banner[hidden] { display:none; }
   #pairbox { position:fixed; inset:0; display:grid; place-content:center; justify-items:center; gap:1vh; text-align:center; pointer-events:none; }
   #pairbox[hidden] { display:none; }
   #paircode { font:700 16vmin ui-monospace,Menlo,monospace; letter-spacing:.08em; color:var(--accent); }
@@ -54,6 +61,8 @@
   </div>
 
   <section class="pane on" data-pane="play">
+    <ol id="firsthint"><li>Press <b>Use microphone</b> and choose Allow.</li><li>Talk. The bar below moves and so does the mouth.</li><li>Press <b>Play and full screen</b> to hide this menu.</li></ol>
+    <label id="meterrow">Sound in <span id="meter"><i></i></span></label>
     <button id="play" class="primary" type="button" autofocus>Play and full screen</button>
     <button id="mic" type="button">Use microphone</button>
     <label id="filerow">Audio file <input id="file" type="file" accept="audio/*"></label>
@@ -85,8 +94,14 @@
   <section class="pane" data-pane="screens">
     <div id="screenpane">
       <p>Show this face on another screen, such as a TV on the same Wi-Fi or network.</p>
-      <p id="tvurlrow" hidden>On the TV's browser, open <b id="tvurl"></b>. It shows a code. Type the code below.</p>
-      <label>Code <input id="pairinput" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <div id="tvurlrow" hidden>
+        <p>On the TV's browser, open this address. It shows a code. Type the code below.</p>
+        <p id="tvurl"></p>
+        <div id="qr"></div>
+        <small>Or scan this with a phone to read the address, then type it into the TV.</small>
+        <small id="tvother"></small>
+      </div>
+      <label>Code <input id="pairinput" type="text" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
       <button id="pairbtn" type="button" class="primary">Add screen</button>
       <button id="endshare" type="button" class="danger">Stop sharing</button>
       <div id="screenstatus" role="status"></div>
@@ -101,6 +116,7 @@
     <small>Back, Esc or a tap brings this menu back. Settings stay in this browser only.</small>
   </div>
 </aside>
+<div id="banner" hidden>Reconnecting… check that Funny Faces is still running on the computer.</div>
 <div id="pairbox" hidden><div id="paircode"></div><p id="pairmsg"></p></div>
 <div id="toast" role="status"></div>
 <script type="module" src="src/app.js"></script>

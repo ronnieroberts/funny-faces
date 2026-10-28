@@ -1,7 +1,7 @@
 # Plan: a download that needs no Node and no terminal
 
 Goal: someone with no technical background downloads one thing, double-clicks it, and gets the control page plus
-a TV address and QR code. Status: a plan, nothing built. Rough sizes are guesses, not measurements.
+a TV address and QR code. Status: option A (zip with Node inside), the QR code, the first-run hint with a level meter and the "Reconnecting" banner are built (`scripts/make-release.mjs`, `.github/workflows/release.yml`). Options B to D are still plans. The zip has been smoke-tested on one Mac with a stand-in Node; the CI build, Windows and a real download have not been tried. Rough sizes are guesses, not measurements.
 
 ## What stands in the way today
 - Node.js has to be installed, and `npm start` typed into a terminal (the biggest drop-off in the consumer review).
