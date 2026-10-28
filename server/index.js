@@ -79,7 +79,11 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
       if (!auth.checkPassword(password, ip(req))) return json(res, 401, { error: 'Wrong password' });
       return json(res, 200, { ok: true }, { 'set-cookie': auth.cookie(auth.token()) });
     }
-    if (path === '/screen') { res.writeHead(302, { location: '/?screen' }); return res.end(); }
+    if (path === '/screen') {                          // keep the output options (?mirror=1&flip=1&awake=0) through the redirect
+      const q = new URLSearchParams({ screen: '' });
+      for (const k of ['mirror', 'flip', 'awake']) if (url.searchParams.has(k)) q.set(k, url.searchParams.get(k).slice(0, 5));
+      res.writeHead(302, { location: '/?' + q.toString().replace('screen=', 'screen') }); return res.end();
+    }
 
     // The control page. A screen (?screen) is only the page: it can do nothing without a code.
     if ((path === '/' || path === '/index.html') && !url.searchParams.has('screen') && !auth.mayControl(req)) {

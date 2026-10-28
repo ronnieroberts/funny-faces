@@ -19,6 +19,7 @@ export const DEFAULTS = {
   mode: 'sync', turnPause: 0.35, breakIns: 0.4,
   adv: { ...ADV_DEFAULTS },
   pumpkins: [newPumpkin(0)],
+  output: { mirror: false, flip: false, keepAwake: true },   // per device: never shared with display screens
 };
 
 const num = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -32,6 +33,12 @@ function pumpkin(o, i) {
     trim: num(p.trim, -20, 20, 0), enabled: p.enabled !== false,
     dx: num(p.dx, -2, 2, 0), dy: num(p.dy, -2, 2, 0), scale: num(p.scale, 0.2, 3, 1), color: color(p.color),
   };
+}
+
+/** Output options for this device: mirror (rear projection), flip (projector upside down), keep the screen awake. */
+export function sanitizeOutput(o) {
+  const v = o && typeof o === 'object' ? o : {};
+  return { mirror: v.mirror === true, flip: v.flip === true, keepAwake: v.keepAwake !== false };
 }
 
 export function sanitize(o) {
@@ -50,6 +57,7 @@ export function sanitize(o) {
     snap: num(a.snap, 0, 1, ADV_DEFAULTS.snap), voiceFocus: num(a.voiceFocus, 0, 1, ADV_DEFAULTS.voiceFocus),
     shapeDetail: num(a.shapeDetail, 0, 1, 1), idleDim: num(a.idleDim, 0, 1, ADV_DEFAULTS.idleDim),
   };
+  s.output = sanitizeOutput(o.output);
   const list = Array.isArray(o.pumpkins) ? o.pumpkins.slice(0, MAX_PUMPKINS) : [];
   s.pumpkins = list.length ? list.map(pumpkin) : [pumpkin({ face: typeof o.face === 'string' ? o.face : undefined }, 0)];
   return s;

@@ -9,6 +9,7 @@ import { drag, scale, nudge } from './layout.js';
 import { Link, loadConfig } from './relay.js';
 import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
 import { captureTabAudio, tabAudioSupported, TAB_AUDIO_MESSAGES } from './tabaudio.js';
+import { applyOutput, loadScreenOutput, saveScreenOutput, screenAddress, createWakeLock, awakeMessage } from './output.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage'), ctx = canvas.getContext('2d');
@@ -150,6 +151,32 @@ $('arrange').addEventListener('click', () => {
 // ---------------------------------------------------------------- screens: show the face on other displays
 const screenMode = params.has('screen');                // this page is a display, not the main screen
 if (screenMode) document.body.classList.add('screen');
+
+// ---- output: mirror, flip and keep-awake belong to this device (a screen keeps its own, from ?mirror=1&flip=1&awake=0)
+const output = screenMode ? loadScreenOutput(params) : settings.output;
+applyOutput(output, document.body);
+const wake = createWakeLock(navigator, document);
+let playingNow = false;
+function refreshAwake() { return playingNow && output.keepAwake ? wake.acquire() : wake.release(); }
+wake.onchange = (s) => {
+  const m = awakeMessage(s);
+  $('awakestatus').textContent = m || '';
+  if (m && screenMode) toast(m);
+};
+function setPlaying(on) { playingNow = on; refreshAwake(); }
+for (const el of document.querySelectorAll('[data-path^="output."]')) {
+  el.addEventListener('input', () => { applyOutput(output, document.body); refreshAwake(); });
+}
+function screenKey(e) {                                  // on a display: M mirrors, F flips
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey || e.metaKey || e.altKey || (k !== 'm' && k !== 'f')) return false;
+  const name = k === 'm' ? 'mirror' : 'flip';
+  output[name] = !output[name];
+  applyOutput(output, document.body); saveScreenOutput(output);
+  toast(`${name === 'mirror' ? 'Mirror' : 'Flip'} ${output[name] ? 'on' : 'off'}`);
+  return true;
+}
+addEventListener('pagehide', () => { wake.release(); });
 const mem = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -232,6 +259,7 @@ function startDisplayLink() {
   link = new Link(relayUrl, {
     open() {
       clearTimeout(bannerTimer); $('banner').hidden = true;
+      setPlaying(true);                               // a display is a pure screen: awake while connected
       const s = mem.get(SCREEN_KEY);
       link.send(s ? { action: 'screen', session: s.session } : { action: 'register' });
     },
@@ -268,14 +296,22 @@ function startDisplayLink() {
   link.start();
 }
 
+// The address (and QR code) a screen should open, with its mirror and flip options added.
+let tvUrls = [];
+function renderTvAddress() {
+  const opts = { mirror: $('tvmirror').checked, flip: $('tvflip').checked }, addr = screenAddress(tvUrls[0], opts);
+  $('tvurl').textContent = addr;
+  try { $('qr').innerHTML = qrSvg(addr); } catch { $('qr').replaceChildren(); /* too long for a QR: the text is still there */ }
+  $('tvother').textContent = tvUrls.length > 1 ? 'If that does not work, try: ' + tvUrls.slice(1).map((u) => screenAddress(u, opts)).join('  or  ') : '';
+}
+for (const id of ['tvmirror', 'tvflip']) $(id).addEventListener('change', () => { if (tvUrls.length) renderTvAddress(); });
+
 async function initRelay() {
   const cfg = await loadConfig();
   relayUrl = cfg && cfg.relay;
   if (cfg && cfg.info && cfg.info.urls.length) {
-    const addr = cfg.info.urls[0] + '/screen';
-    $('tvurl').textContent = addr;
-    try { $('qr').innerHTML = qrSvg(addr); } catch { /* too long for a QR: the text is still there */ }
-    if (cfg.info.urls.length > 1) $('tvother').textContent = 'If that does not work, try: ' + cfg.info.urls.slice(1).map((u) => u + '/screen').join('  or  ');
+    tvUrls = cfg.info.urls;
+    renderTvAddress();
     $('tvurlrow').hidden = false;
   }
   if (screenMode) {
@@ -332,6 +368,7 @@ async function playFile(file) {
     el.loop = true;
     source = new TrackSource(track, () => (el ? el.currentTime : 0));
     await el.play();
+    setPlaying(true);
     $('firsthint').hidden = true;
     say('Playing ' + label + ' with a mouth track (' + Math.round(track.data.length / 2 / track.fps) + ' s analysed)');
     return true;
@@ -344,7 +381,7 @@ function playLive(url, label) {
   const src = audio.createMediaElementSource(el);
   live.connect(src);
   src.connect(audio.destination);
-  return el.play().then(() => { say('Playing ' + label); return true; }, () => false);
+  return el.play().then(() => { setPlaying(true); say('Playing ' + label); return true; }, () => false);
 }
 async function useMic() {
   try {
@@ -352,6 +389,7 @@ async function useMic() {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     live.connect(audio.createMediaStreamSource(stream));
     $('firsthint').hidden = true;
+    setPlaying(true);
     say('Listening to the microphone');
   } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
 }
@@ -444,7 +482,7 @@ canvas.addEventListener('wheel', (e) => {
 $('reset').addEventListener('click', () => { Object.assign(settings, { x: 0, y: 0, size: 0.8 }); syncControls(); persist(); });
 
 addEventListener('keydown', (e) => {
-  if (screenMode) { if (e.key === 'Enter') goFull(); return; }
+  if (screenMode) { if (screenKey(e)) return; if (e.key === 'Enter') goFull(); return; }
   if (menuOpen()) {
     if (e.key === 'Escape') showMenu(false);
     return;                                           // let the menu use its own keys

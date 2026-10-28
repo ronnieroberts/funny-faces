@@ -109,6 +109,20 @@ Stop sharing in the browser to end it. This works in Chrome or Edge on a compute
 sound; on Windows a whole screen can too). TV browsers cannot do it: capture on the computer and let the TV screen
 follow. Tip: play the music in a Chrome tab and use Voice focus / Voice bands on the Advanced and Pumpkins tabs so
 each pumpkin follows its own part.
+## Projectors: mirror, flip and keep-awake
+
+A projector behind a screen shows a mirrored picture, and a projector mounted upside down shows it upside down.
+These options belong to each device, so the projector's own page can have them while the control page does not.
+
+- **Control page:** Look tab, **Output**: *Mirror (rear projection)*, *Flip upside down*, *Keep the screen awake*.
+- **Display screens (`/screen`):** add them to the address, for example `/screen?mirror=1&flip=1&awake=0`. The Screens
+  tab has two boxes that add `mirror=1` and `flip=1` to the address and QR code for you. The screen remembers them,
+  and the keys **M** (mirror) and **F** (flip) change them while it is showing.
+- **Mirror** swaps left and right. **Flip** turns the picture a half turn (an upside-down projector). Both together
+  turn it top to bottom.
+- **Keep awake** asks the browser not to let the screen sleep while faces are showing. It needs a recent browser and a
+  secure page (`localhost` or `https`); over plain `http` on a TV it is usually not available, and the page says so.
+  In that case turn off the TV or projector's own sleep timer.
 
 ## Kiosk and Fire TV use
 
