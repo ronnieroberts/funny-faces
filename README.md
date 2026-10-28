@@ -190,6 +190,11 @@ If a file cannot be used, the Faces tab shows a notice with the file name and th
 `my-pack.json: That file is not valid JSON`, and carries on with the others. A pack whose `id` matches one you added
 by hand wins over it; the built-in `id` cannot be used.
 
+**Make your own with an AI assistant.** `docs/FACEPACK.md` has a ready-to-paste prompt for your favorite chat assistant,
+plus design advice (how far a mouth should open, how much movement is too much, why fire is slow). Describe the characters
+you want, save the reply as a `.json` file, and drop it in the packs folder. If the page rejects it, paste the message
+back to the assistant and ask it to fix the file.
+
 **Add a pack from a file.** On the Faces tab, **Add faces** picks a file and keeps it in this browser only. Use this for a
 one-off try; use the folder for packs you want on every device that controls Funny Faces.
 
