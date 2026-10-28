@@ -13,46 +13,67 @@ per 40 ms) that plays in sync with the sound. The "Singer focus" box favors the 
 the singer usually is. Shape logic is in `src/visemes.js`, tracks in `src/track.js`. The G and H shapes appear
 only in tracks that carry them; the live classifier uses the other seven.
 
-## Run it
+## Quick start
 
-Any static host works (an S3 bucket behind CloudFront, GitHub Pages, and so on). Locally:
+You need [Node.js](https://nodejs.org) 22 or newer (the "LTS" download). Then, in this folder:
 
 ```bash
-python3 -m http.server 8900
+npm start
 ```
 
-Then open http://localhost:8900/. The microphone needs HTTPS or localhost.
+It prints two addresses. Open the first one (`http://localhost:8765/`) in Chrome on this computer: that is the
+control page. The microphone and tab capture work there with no certificate, because `localhost` counts as secure.
+No password is asked on this computer.
+
+### A second screen (a TV, a projector, another computer)
+
+1. On the TV open its browser and go to the second address `npm start` printed, like `http://192.168.1.23:8765/screen`.
+2. The TV shows a 6-character code.
+3. On the control page open the **Screens** tab, type the code and press **Add screen**.
+
+The TV needs no password and no account, only the code. It remembers the pairing, so after a restart it just
+reconnects. Everything stays on your home network. The computer running Funny Faces has to stay on and awake,
+and the first time you run it the computer may ask whether to allow incoming connections: allow it, or the TV
+cannot reach it.
+
+### Controlling from a phone or another computer
+
+By default only the computer running Funny Faces can open the control page. To open it to your network, start with
+`FACES_LAN_CONTROL=1 npm start`. The first person to visit sets a password; everyone after that logs in. The
+microphone does not work from another device over plain `http`, so use this for sliders and face choice, and keep
+the microphone on the computer.
+
+### Docker
+
+```bash
+docker build -t funny-faces .
+docker run -d -p 8765:8765 -v funny-faces-data:/data funny-faces
+```
+
+Inside a container every browser looks like it is on the network, so the container always asks for a password
+(first visit sets it). Open `http://localhost:8765/` on the host computer so the microphone works.
+
+### Just one screen, nothing to install
+
+`node scripts/build-standalone.mjs` writes `dist/standalone/index.html`, one file you can open in Chrome with no
+server (microphone only, no extra screens).
 
 ## Kiosk and Fire TV use
 
-Open `index.html?audio=<url>` (the file on the same site, or a host that allows cross-origin reads).
-It starts playing at once when the browser allows it. If the browser blocks autoplay, press the one
-focused button (Enter on a remote, or a tap): it plays, goes full screen and hides everything but the
-face. Back, Escape or a tap brings the controls back. Other options: `face=<id>`, `color=<hex, no #>`,
-`loop=0` to play once. Not yet tested on a real Fire TV.
+Open `/?audio=<url>` (a file on the same server or a host that allows cross-origin reads). It starts playing at
+once when the browser allows it. If the browser blocks autoplay, press the one focused button (Enter on a remote,
+or a tap): it plays, goes full screen and hides everything but the face. Back, Escape or a tap brings the controls
+back. Other options: `face=<id>`, `color=<hex, no #>`, `loop=0` to play once. Not yet tested on a real Fire TV.
 
-## Showing the face on other screens
+## How the screens work
 
-Open the page with `?screen` added on the other display (a TV, for example). It shows a 6-character code.
-On the main screen open the Screens tab, type the code and press Add screen. The display then shows the
-same character, colour and layout, and its mouth follows the microphone on the main screen. Only the
-microphone drives the mouth; play music through other speakers and let the main device hear it.
+The control page sends the character and look when they change, and three small mouth values about 15 times a
+second while there is sound. The server (`server/`, no dependencies) passes them to every paired screen over a
+WebSocket. Pairing codes last 10 minutes and work once. Sessions are saved in `FACES_DATA` (default `./data`) so
+screens survive a restart. Settings: `PORT` (8765), `HOST` (0.0.0.0), `FACES_DATA`, `FACES_LAN_CONTROL`.
 
-How it works: the main page sends the character and settings when they change, and a few small mouth
-values about 15 times a second while there is sound. Nothing is sent while it is quiet. A small relay
-(API Gateway WebSocket, one Lambda, one DynamoDB table; see `relay/`) passes the messages along. Displays
-remember their pairing and reconnect by themselves. Sharing needs `config.json` next to `index.html`
-(see `config.example.json`); it is not committed.
-
-## Hosting and caching
-
-`node scripts/build.mjs` writes `dist/` with content-hashed script names. Host `dist/` on S3 behind
-CloudFront (or any CDN). Scripts and media are served with `max-age=31536000, immutable`, so a repeat
-visit loads nothing from the network. Only `index.html` has a short cache (60 seconds, then stale for a
-day while it refreshes) because it is the one file that points at the current hashed scripts. Never
-overwrite a media file under the same name; give a new recording a new name.
-
-`scripts/deploy.sh` does the upload and the `index.html` invalidation (set `BUCKET` and `DISTRIBUTION`).
+Security in short: a TV can only show; it cannot control anything. Controlling needs either to be on the computer
+itself, or (with `FACES_LAN_CONTROL=1`) the password. The server does not use the internet at all.
 
 ## What it does today
 
@@ -72,7 +93,7 @@ by `node scripts/make-christmas-pack.mjs`, which is also a handy example for mak
 
 ## Known limits
 
-- No pairing between devices, no shared library, no song pre-analysis.
+- One face at a time for now; no shared library.
 - Music mixed into the input moves the mouth too. Separating voices needs a model (next step).
 - Safari on iOS needs a tap before audio starts and cannot capture tab audio.
 
@@ -84,4 +105,4 @@ node --test tests
 
 ## Rules
 
-Never commit credentials, tokens, IP addresses or private hostnames. Use placeholders in docs.
+Never commit credentials, tokens, IP addresses or private hostnames. Use placeholders in docs (192.168.1.23 above is an example).

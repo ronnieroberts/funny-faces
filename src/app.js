@@ -220,8 +220,12 @@ function startDisplayLink() {
 async function initRelay() {
   const cfg = await loadConfig();
   relayUrl = cfg && cfg.relay;
+  if (cfg && cfg.info && cfg.info.urls.length) {
+    $('tvurl').textContent = cfg.info.urls[0] + '/screen';
+    $('tvurlrow').hidden = false;
+  }
   if (screenMode) {
-    if (!relayUrl) showPairBox('', 'Screens need the hosted version of this page.');
+    if (!relayUrl) showPairBox('', 'This page needs to be opened from Funny Faces on your computer.');
     else { showPairBox('', 'Connecting…'); startDisplayLink(); }
     return;
   }
