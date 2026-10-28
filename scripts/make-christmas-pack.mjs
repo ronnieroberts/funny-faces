@@ -105,6 +105,6 @@ faces.push({ id: 'elf-jolly', name: 'Jolly Elf', layers: [
   smile({ x0: 34, x1: 66, y: 72, curve: 6, depth: 18 })] });
 
 const pack = validatePack({ format: 'pumpkin-face-pack', version: 1, id: 'christmas', name: 'Christmas',
-  author: 'Face Characters', license: 'Free to use', faces });
+  author: 'Funny Faces', license: 'Free to use', faces });
 writeFileSync('packs/christmas.json', JSON.stringify(pack, null, 1) + '\n');
 console.log(`packs/christmas.json: ${pack.faces.length} faces`);

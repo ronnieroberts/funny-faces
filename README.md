@@ -1,8 +1,17 @@
-# Face Characters
+# Funny Faces
 
 A single static web page that gives a talking face to any audio. Open it, pick a face, point it at a
 microphone or an audio file, and the mouth follows the voice. There is no server and no account.
 Settings are stored in this browser only (localStorage).
+
+## Mouth shapes
+
+The mouth uses nine Rhubarb-style shapes: rest, closed, teeth, open, wide open, rounded, puckered, teeth-on-lip and
+tongue-up. Live sound picks a shape from the spectrum in the browser, with no model and no download. An audio
+file (or `?audio=` link) is analysed once, in the browser, into a small track (one shape and one loudness digit
+per 40 ms) that plays in sync with the sound. The "Singer focus" box favors the centre of the stereo mix, where
+the singer usually is. Shape logic is in `src/visemes.js`, tracks in `src/track.js`. The G and H shapes appear
+only in tracks that carry them; the live classifier uses the other seven.
 
 ## Run it
 
