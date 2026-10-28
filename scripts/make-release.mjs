@@ -127,6 +127,7 @@ try {
   cpSync(nodeFile, join(root, 'runtime', basename(spec.bin)));
   chmodSync(join(root, 'runtime', basename(spec.bin)), 0o755);
   cpSync(licenseFile, join(root, 'runtime', 'LICENSE-node.txt'));
+  mkdirSync(join(root, 'packs')); cpSync('packs/README.txt', join(root, 'packs/README.txt'));   // where people drop face packs
   writeFileSync(join(root, 'THIRD-PARTY-NOTICES.txt'), NOTICES.replace(/\n/g, os === 'win' ? '\r\n' : '\n'));
   const launcher = join(root, spec.launcher);
   writeFileSync(launcher, LAUNCHERS[os === 'win' ? 'win' : os === 'mac' ? 'mac' : 'linux']);

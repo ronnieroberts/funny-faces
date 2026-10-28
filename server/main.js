@@ -2,19 +2,23 @@
 //   PORT=8765   HOST=0.0.0.0   FACES_DATA=./data   FACES_LAN_CONTROL=1 (let other devices open the control page, with a password)
 //   FACES_NO_BUILD=1 skips rebuilding the page (the Docker image and the downloads build it once)
 //   FACES_MAX_CONNECTIONS=256   FACES_MAX_WS_PER_IP=20   limits on open connections (all Docker clients share one address)
+//   FACES_PACKS_DIR=./packs   the folder where you drop face pack files (*.json); the page offers them on every load
 //   FACES_OPEN=1 opens the control page in the default browser (the double-click launchers set it)
 import { execFile, execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp, lanUrls } from './index.js';
 
 // Work from any directory: the app's own folder is found from this file, not from where it was started.
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The packs folder sits next to the app: in a download it is beside app/ and runtime/, in a checkout it is in the project.
+const packsDefault = existsSync(join(root, 'packs')) || !existsSync(join(root, '..', 'packs')) ? join(root, 'packs') : join(root, '..', 'packs');
 const port = Number(process.env.PORT) || 8765;
 if (!process.env.FACES_NO_BUILD) execFileSync(process.execPath, [join(root, 'scripts/build.mjs')], { cwd: root, stdio: 'ignore' });
 const limit = (name, dflt) => (Number(process.env[name]) > 0 ? Number(process.env[name]) : dflt);
 const app = createApp({
-  port, host: process.env.HOST || '0.0.0.0', dataDir: process.env.FACES_DATA || join(root, 'data'), distDir: process.env.FACES_DIST || join(root, 'dist'),
+  port, host: process.env.HOST || '0.0.0.0', dataDir: process.env.FACES_DATA || join(root, 'data'), distDir: process.env.FACES_DIST || join(root, 'dist'), packsDir: process.env.FACES_PACKS_DIR || packsDefault,
   lanControl: /^(1|true|yes)$/i.test(process.env.FACES_LAN_CONTROL || ''),
   maxConnections: limit('FACES_MAX_CONNECTIONS', 256), maxPerIp: limit('FACES_MAX_WS_PER_IP', 20),
 });

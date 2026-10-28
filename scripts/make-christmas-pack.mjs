@@ -1,4 +1,4 @@
-// Generates packs/christmas.json. Faces are drawn on a 100 x 100 grid in one colour, so outlines are thin
+// Generates examples/christmas.json. Faces are drawn on a 100 x 100 grid in one colour, so outlines are thin
 // shapes and rings are a single polygon whose inner loop runs the other way (that makes the hole).
 import { writeFileSync } from 'node:fs';
 import { validatePack } from '../src/facepack.js';
@@ -106,5 +106,5 @@ faces.push({ id: 'elf-jolly', name: 'Jolly Elf', layers: [
 
 const pack = validatePack({ format: 'pumpkin-face-pack', version: 1, id: 'christmas', name: 'Christmas',
   author: 'Funny Faces', license: 'Free to use', faces });
-writeFileSync('packs/christmas.json', JSON.stringify(pack, null, 1) + '\n');
-console.log(`packs/christmas.json: ${pack.faces.length} faces`);
+writeFileSync('examples/christmas.json', JSON.stringify(pack, null, 1) + '\n');
+console.log(`examples/christmas.json: ${pack.faces.length} faces`);

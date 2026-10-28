@@ -78,7 +78,7 @@ docker run -d -p 8765:8765 -v funny-faces-data:/data funny-faces
 ```
 
 Inside a container every browser looks like it is on the network, so the container always asks for a password
-(first visit sets it, with the setup code in the container logs; see Security and privacy for the lockout that all Docker clients share). `docker stop` saves the pairings first. Open `http://localhost:8765/` on the host computer so the microphone works.
+(first visit sets it, with the setup code in the container logs; see Security and privacy for the lockout that all Docker clients share). `docker stop` saves the pairings first. `FACES_MAX_WS_PER_IP` (default 20) controls how many screens one address can open; every Docker client can look like one address, so for more than about 5 screens raise it. Open `http://localhost:8765/` on the host computer so the microphone works.
 
 ### Just one screen, nothing to install
 
@@ -155,7 +155,7 @@ itself, or (with `FACES_LAN_CONTROL=1`) the password. The server does not use th
 
 - Left-hand menu: Play, Faces, Layout, Look. Hide it (or go full screen) and only the face remains.
 - Draws the starter faces on a canvas, full screen.
-- Add more faces by importing a face pack (one JSON file, see docs/FACEPACK.md). Packs are validated and kept in this browser; `?pack=<url>` loads one for a single visit.
+- Add more faces by importing a face pack (one JSON file, see docs/FACEPACK.md). Packs are validated and kept in this browser. Or drop them in the packs folder (see Adding your own faces).
 - Size and move the face: drag it, scroll or pinch to resize, or use the Layout sliders. With the menu hidden, remote arrows move it and Select switches the up and down arrows to resizing.
 - Mouth opens with the speech band (150 to 3500 Hz) of the chosen source, with an adaptive quiet cutoff and nine mouth shapes.
 - Sources: microphone, or a local audio file.
@@ -163,9 +163,35 @@ itself, or (with `FACES_LAN_CONTROL=1`) the password. The server does not use th
 
 ## Extra face packs
 
-`packs/christmas.json` has nine faces: four snowmen (classic, top hat, scarf, grumpy), two Christmas trees
-(plain and with lights) and three elves (elf, cheeky, jolly). Import it from the Faces tab. It is generated
+`examples/christmas.json` has nine faces: four snowmen (classic, top hat, scarf, grumpy), two Christmas trees
+(plain and with lights) and three elves (elf, cheeky, jolly). Add it with the Faces tab or the packs folder (see below). It is generated
 by `node scripts/make-christmas-pack.mjs`, which is also a handy example for making packs in code.
+
+## Adding your own faces
+
+A face pack is one `.json` file (the format is in `docs/FACEPACK.md`). There are two ways to add one.
+
+**The packs folder (recommended).** Funny Faces offers every pack file it finds in a folder called `packs`. Nothing is
+uploaded; the file stays on your computer.
+
+1. Find the folder.
+   - Download (zip): the `packs` folder inside the `Funny Faces` folder, next to `app` and `runtime`.
+   - npm or a checkout (`npm start`): the `packs` folder in the project. To use another folder, start with
+     `FACES_PACKS_DIR=/path/to/folder npm start`.
+   - Docker: the `/data/packs` folder in the container. Mount a folder of yours there, for example
+     `docker run -d -p 8765:8765 -v funny-faces-data:/data -v "$PWD/my-packs":/data/packs:ro funny-faces`
+     (put your `.json` files in `my-packs`), or copy a file into the data volume's `packs` folder.
+2. Copy your pack file (`something.json`) into it. Up to 20 files, 2 MB each.
+3. Reload the Funny Faces page. You do not need to restart anything.
+4. Open the **Faces** tab. Your packs are listed after the built-in faces, marked "from the packs folder". They are read again on
+   every load, so to remove one, delete its file and reload.
+
+If a file cannot be used, the Faces tab shows a notice with the file name and the reason, for example
+`my-pack.json: That file is not valid JSON`, and carries on with the others. A pack whose `id` matches one you added
+by hand wins over it; the built-in `id` cannot be used.
+
+**Add a pack from a file.** On the Faces tab, **Add faces** picks a file and keeps it in this browser only. Use this for a
+one-off try; use the folder for packs you want on every device that controls Funny Faces.
 
 ## Known limits
 

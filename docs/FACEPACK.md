@@ -55,4 +55,15 @@ Up to 50 faces per pack, 40 layers per face, 200 points per shape. Files over 2 
 
 ## Making and using packs
 
-In the app, open **Face packs and presets** and choose **Export Starter Pack** to get a working example to edit. **Import pack** adds a file; packs with the same `id` replace the older one. Each pumpkin picks its face from the **Face** list.
+In the app, open **Face packs and presets** and choose **Export Starter Pack** to get a working example to edit.
+
+There are two ways to use a pack:
+
+- **The packs folder.** Copy the `.json` file into the `packs` folder next to the app (the Docker path is `/data/packs`; set
+  `FACES_PACKS_DIR` to use another folder), then reload the page. The server lists the files (only `*.json`, at most 20,
+  each up to 2 MB) and the page validates each one. A file that fails is skipped and the Faces tab says which file and why.
+  Folder packs show as "from the packs folder", are read again on every load, and cannot be removed in the app: delete the file.
+- **Add a pack from a file.** The **Add faces** button on the Faces tab keeps the pack in this browser only.
+
+Each `id` must be unique. If a folder pack and a stored pack share an `id`, the folder pack is shown; the built-in pack's `id`
+is reserved. Each pumpkin picks its face from the **Face** list.

@@ -8,6 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { Auth, isLocal, sameOrigin } from './auth.js';
 import { Relay } from './relay.js';
 import { upgrade } from './ws.js';
+import { listPacks, readPack } from './packs.js';
 
 const bareIp = (a) => String(a || '').replace(/^::ffff:/, '');
 
@@ -43,7 +44,7 @@ export function lanUrls(port) {
 
 const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : d);
 
-export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', distDir = './dist', lanControl = false,
+export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', distDir = './dist', packsDir = './packs', lanControl = false,
   maxConnections = 256, maxPerIp = 20, pingMs = 30000, pongMs = 10000, idleMs = 60000, rate = 100, burst = 200, onNewCode } = {}) {
   const auth = new Auth(dataDir, { lanControl, ...(onNewCode ? { onNewCode } : {}) });
   auth.needSetupCode();
@@ -94,6 +95,15 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
 
     if (path === '/api/info') {
       return json(res, 200, { urls: lanUrls(server.address().port), local: isLocal(req), lanControl, mayControl: auth.mayControl(req) });
+    }
+    if (path === '/api/packs' || path.startsWith('/api/packs/')) {   // read-only, and only for whoever may control
+      if (req.method !== 'GET' || !auth.mayControl(req) || (req.headers.origin && !sameOrigin(req))) return json(res, 403, { error: 'Not allowed' });
+      if (path === '/api/packs') return json(res, 200, listPacks(packsDir));
+      let name;
+      try { name = decodeURIComponent(path.slice('/api/packs/'.length)); } catch { name = ''; }
+      const text = readPack(packsDir, name);
+      if (!text) return json(res, 404, { error: 'Not found' });
+      res.writeHead(200, { 'content-type': TYPES['.json'], 'cache-control': 'no-store' }); return res.end(text);
     }
     if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Not allowed' });
