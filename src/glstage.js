@@ -59,7 +59,7 @@ export class GLStage {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      t = { tex, size };
+      t = { tex, size, fresh: true };
       this.textures.set(key, t);
     }
     return t;
@@ -70,13 +70,16 @@ export class GLStage {
     for (const [k, t] of this.textures) if (k >= count) { this.gl.deleteTexture(t.tex); this.textures.delete(k); }
   }
 
+  /** Block until the GPU has finished (reading one pixel back forces it). For the benchmark only. */
+  sync() { this.gl.readPixels(0, 0, 1, 1, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.px || (this.px = new Uint8Array(4))); }
+
   clear() {
     const gl = this.gl;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
-  /** items: [{key, canvas, quad}] where canvas is a square tile and quad has corners TL, TR, BR, BL as stage fractions. */
+  /** items: [{key, canvas, quad, dirty}] where canvas is a square tile and quad has corners TL, TR, BR, BL as stage fractions. */
   draw(items) {
     if (this.lost) return;
     const gl = this.gl, W = this.canvas.width, H = this.canvas.height, A = W / H, v = this.verts;
@@ -84,7 +87,7 @@ export class GLStage {
     for (const it of items) {
       const t = this.texture(it.key, it.canvas.width);
       gl.bindTexture(gl.TEXTURE_2D, t.tex);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, it.canvas);
+      if (it.dirty || t.fresh) { gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, it.canvas); t.fresh = false; }   // only a redrawn tile is uploaded
       const q = quadQ(it.quad.map(([x, y]) => [x * A, y]));
       for (let i = 0; i < 4; i++) {
         const w = q[i], x = it.quad[i][0] * 2 - 1, y = 1 - it.quad[i][1] * 2;

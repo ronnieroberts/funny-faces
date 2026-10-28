@@ -1,5 +1,6 @@
 // Everything is kept in this browser only. Nothing is sent anywhere.
 import { gridQuads, sanitizeQuad } from './quad.js';
+import { QUALITY_SETTINGS } from './quality.js';
 const KEY = 'face-characters.settings.v1';
 export const MAX_PUMPKINS = 8;
 export const MODES = ['sync', 'bands', 'turns', 'random'];
@@ -8,7 +9,7 @@ export const VOICE_NAMES = { full: 'Full range', bass: 'Bass', baritone: 'Barito
 const DEFAULT_VOICES = ['bass', 'tenor', 'alto', 'soprano', 'baritone', 'treble', 'full', 'full'];
 const DEFAULT_FACES = ['starter/classic', 'starter/round', 'starter/cat', 'starter/angry', 'starter/skull', 'starter/grin', 'starter/classic', 'starter/round'];
 
-export const ADV_DEFAULTS = { inputDb: 0, outputGain: 1, gate: 0.35, snap: 0.6, voiceFocus: 0.3, shapeDetail: 1, idleDim: 0.5 };
+export const ADV_DEFAULTS = { inputDb: 0, outputGain: 1, gate: 0.35, snap: 0.6, voiceFocus: 0.3, shapeDetail: 1, idleDim: 0.5, quality: 'auto' };
 
 /** Aspect (width / height) the default quads are made for when the real window is not known. */
 export const DEFAULT_ASPECT = 16 / 9;
@@ -71,6 +72,7 @@ export function sanitize(o, A = DEFAULT_ASPECT) {
     outputGain: num(a.outputGain, 0.4, 2, 1), gate: num(a.gate ?? o.gate, 0, 0.9, ADV_DEFAULTS.gate),
     snap: num(a.snap, 0, 1, ADV_DEFAULTS.snap), voiceFocus: num(a.voiceFocus, 0, 1, ADV_DEFAULTS.voiceFocus),
     shapeDetail: num(a.shapeDetail, 0, 1, 1), idleDim: num(a.idleDim, 0, 1, ADV_DEFAULTS.idleDim),
+    quality: QUALITY_SETTINGS.includes(a.quality) ? a.quality : 'auto',   // settings saved before this have none: Auto
   };
   s.output = sanitizeOutput(o.output);
   const list = Array.isArray(o.pumpkins) ? o.pumpkins.slice(0, MAX_PUMPKINS) : [];

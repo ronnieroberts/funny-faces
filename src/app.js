@@ -4,6 +4,7 @@ import { analyze } from './track.js';
 import { qrSvg } from './qr.js';
 import { load, save, resize, arrange, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
 import { Stage } from './stage.js';
+import { runBench } from './bench.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES, mergePacks, loadFolderPacks, describeProblems } from './packs.js';
 import { drag, scale, nudge } from './layout.js';
 import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
@@ -555,6 +556,8 @@ addEventListener('keydown', (e) => {
 
 // ---------------------------------------------------------------- drawing
 let last = performance.now();
+const benching = params.has('bench');            // ?bench=1: measure drawing speed (see bench.js)
+if (benching) runBench(stage, findFace(faces, 'starter/flames').face, params);
 const meterFill = document.querySelector('#meter i');
 const enabledPumpkins = () => settings.pumpkins.filter((p) => p.enabled);
 
@@ -591,6 +594,9 @@ function frame(now) {
 }
 
 function draw(now) {
+  if (benching) return;
+  stage.watch(now - last, now);                       // Auto quality follows the real time between frames
+  stage.setQuality(screenMode ? 'auto' : settings.adv.quality);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   let list, look, ms;
