@@ -575,7 +575,18 @@ try {
   w.onmessage = tick;
 } catch { setInterval(tick, 33); }
 
+// The next frame is always requested first, and a failure while drawing is reported once instead of stopping the loop.
+let frameFault = '';
 function frame(now) {
+  requestAnimationFrame(frame);
+  try { draw(now); frameFault = ''; }
+  catch (e) {
+    const msg = String(e && e.message || e);
+    if (msg !== frameFault) { frameFault = msg; console.error('Drawing failed:', e); }
+  }
+}
+
+function draw(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
   let list, look, ms;
@@ -594,6 +605,5 @@ function frame(now) {
   if (list && list.length) stage.draw(list, ms, look, t, dt);
   else stage.clear();
   editor.draw();
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
