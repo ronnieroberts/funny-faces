@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
-const order = ['response.js', 'visemes.js', 'fft.js', 'track.js', 'facepack.js', 'layout.js', 'settings.js', 'packs.js', 'voice.js', 'relay.js', 'share.js', 'app.js'];   // dependencies first
+const order = ['quality.js', 'response.js', 'visemes.js', 'fft.js', 'track.js', 'qr.js', 'facepack.js', 'layout.js', 'quad.js', 'settings.js', 'output.js', 'packs.js', 'conductor.js', 'voice.js', 'glstage.js', 'stage.js', 'bench.js', 'editor.js', 'relay.js', 'share.js', 'screenfollow.js', 'tabaudio.js', 'app.js'];   // dependencies first
 const names = {};
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist/assets', { recursive: true });
@@ -20,11 +20,6 @@ for (const f of order) {
 }
 
 let html = readFileSync('index.html', 'utf8');
-// The relay address (from the untracked config.json) is baked into the page, so the page needs no second request.
-if (existsSync('config.json')) {
-  const relay = JSON.parse(readFileSync('config.json', 'utf8')).relay;
-  if (/^wss:\/\/[\w.\-\/]+$/.test(relay || '')) html = html.replace('<meta name="relay" content="">', `<meta name="relay" content="${relay}">`);
-}
 html = html.replace('src/app.js', `assets/${names['app.js']}`);
 writeFileSync('dist/index.html', html);
 console.log(JSON.stringify(names, null, 2));

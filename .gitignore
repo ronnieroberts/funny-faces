@@ -3,3 +3,7 @@ node_modules/
 dist/
 config.json
 media/_test.wav
+data/
+release/
+packs/*
+!packs/README.txt

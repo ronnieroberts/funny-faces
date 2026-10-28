@@ -1,0 +1,57 @@
+# When a version tag (v1.2.3, or v1.2.3-rc1 for a test release) is pushed, build the no-Node downloads for each system and
+# attach them, with a SHA256SUMS file, to a GitHub release. The tag must match the version in package.json.
+# Actions are pinned to full commit SHAs (the comment names the release each one is).
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [mac-arm64, mac-x64, win-x64, linux-x64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0
+      - name: Tag must match package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          want="$(node -p "require('./package.json').version")"
+          have="$(printf '%s' "$TAG" | sed -E 's/^v//; s/-rc[0-9]+$//')"
+          if [ "$have" != "$want" ]; then
+            echo "Tag '$TAG' does not match package.json version '$want'. Fix one of them and tag again." >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
+        with:
+          node-version: 22
+      - run: npm test
+      - run: node scripts/make-release.mjs --platform ${{ matrix.platform }}
+        env:
+          FACES_NODE_VERSION: v22.23.4        # every zip bundles the same Node
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with:
+          name: ${{ matrix.platform }}
+          path: release/*.zip
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4.3.0
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums
+        run: cd release && sha256sum *.zip > SHA256SUMS && cat SHA256SUMS
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          flag=""
+          case "$TAG" in *-*) flag="--prerelease" ;; esac   # v1.0.1-rc1 is a test release
+          gh release create "$TAG" release/*.zip release/SHA256SUMS --repo "$REPO" --title "Funny Faces $TAG" --generate-notes $flag

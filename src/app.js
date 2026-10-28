@@ -1,23 +1,32 @@
 import { drawFace } from './facepack.js';
-import { LiveVoice, TrackVoice } from './voice.js';
+import { LiveSource, TrackSource, Mouths } from './voice.js';
 import { analyze } from './track.js';
-import { load, save } from './settings.js';
-import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
-import { placement, drag, scale, nudge } from './layout.js';
+import { qrSvg } from './qr.js';
+import { load, save, resize, arrange, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
+import { Stage } from './stage.js';
+import { runBench } from './bench.js';
+import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES, mergePacks, loadFolderPacks, describeProblems } from './packs.js';
+import { drag, scale, nudge } from './layout.js';
+import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
+import { createEditor } from './editor.js';
 import { Link, loadConfig } from './relay.js';
-import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
+import { buildState, parseState, packMouth, mouthFrame, parseMouth, isNewer, changed } from './share.js';
+import { createFollow } from './screenfollow.js';
+import { captureTabAudio, tabAudioSupported, TAB_AUDIO_MESSAGES } from './tabaudio.js';
+import { applyOutput, loadScreenOutput, saveScreenOutput, screenAddress, createWakeLock, awakeMessage } from './output.js';
 
 const $ = (id) => document.getElementById(id);
-const canvas = $('stage'), ctx = canvas.getContext('2d');
-const FACE_PX = 960;                              // the face is drawn square, then placed on the window
-const face = document.createElement('canvas');
-face.width = face.height = FACE_PX;
-const fctx = face.getContext('2d');
+const canvas = $('stage');
+const stage = new Stage(canvas);                       // takes the canvas's context: WebGL2, or 2D when that is missing
+const aspect = () => innerWidth / innerHeight;                  // the stage fills the window (see Stage.fit)
 
-const settings = load();
+const settings = load(undefined, innerWidth / innerHeight);
+$('renderinfo').textContent = stage.mode === 'webgl2' ? 'Drawing with WebGL2: pumpkins can be skewed in perspective.'
+  : 'This browser has no WebGL2. Faces are drawn flat: they move, zoom and rotate, but skew has no perspective.';
 let packs = loadPacks();
 const params = new URLSearchParams(location.search);
 const say = (m) => { $('status').textContent = m; };
+if (stage.mode !== 'webgl2') say('No WebGL2 in this browser: faces are drawn flat, without perspective warp.');
 let toastTimer = 0;
 function toast(m) {
   $('toast').textContent = m; $('toast').classList.add('on');
@@ -25,22 +34,36 @@ function toast(m) {
 }
 
 // ---------------------------------------------------------------- settings
-let saveTimer = 0;
+let saveTimer = 0, sel = 0;                                   // sel: the pumpkin the Faces and Layout tabs are editing
 function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(settings), 250); scheduleShare(); }
-const sliders = ['size', 'x', 'y', 'glow', 'sens', 'gate'];
+const pathOf = (el) => el.dataset.path.replace(/^pk\./, `pumpkins.${sel}.`);
+const getPath = (path) => path.split('.').reduce((a, k) => a[k], settings);
+function setPath(path, v) { const ks = path.split('.'), last = ks.pop(); ks.reduce((a, k) => a[k], settings)[last] = v; }
+const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : '');
 function syncControls() {
-  for (const id of sliders) $(id).value = settings[id];
-  $('color').value = settings.color;
+  for (const el of document.querySelectorAll('[data-path]')) {
+    const v = getPath(pathOf(el));
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  }
+  for (const o of document.querySelectorAll('output[data-for]')) o.textContent = fmt(getPath(pathOf({ dataset: { path: o.dataset.for } })));
+  for (const k of ['size', 'x', 'y']) $(k).value = settings[k];
+  document.body.dataset.mode = settings.mode;
 }
-for (const id of [...sliders, 'color']) {
-  $(id).addEventListener('input', () => { settings[id] = id === 'color' ? $(id).value : +$(id).value; persist(); });
+for (const el of document.querySelectorAll('[data-path]')) {
+  el.addEventListener('input', () => {
+    setPath(pathOf(el), el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value);
+    syncControls(); persist();
+  });
 }
 if (/^[0-9a-fA-F]{6}$/.test(params.get('color') || '')) settings.color = '#' + params.get('color');
+$('reset-adv').addEventListener('click', () => { Object.assign(settings.adv, ADV_DEFAULTS); syncControls(); persist(); toast('Advanced settings reset'); });
 syncControls();
 
 // ---------------------------------------------------------------- faces and packs
-let faces = allFaces(packs);
-if (params.get('face')) settings.face = params.get('face');
+let folderPacks = [];                               // from the packs folder: re-read on every load, never removable here
+const shownPacks = () => mergePacks(packs, folderPacks);
+let faces = allFaces(shownPacks());
+if (params.get('face')) settings.pumpkins[0].face = params.get('face');
 
 function thumb(entry) {
   const c = document.createElement('canvas');
@@ -52,15 +75,16 @@ function thumb(entry) {
 function renderFaces() {
   const root = $('facelist');
   root.replaceChildren();
-  const cur = findFace(faces, settings.face);
-  const packList = [builtIn(), ...packs];
+  const cur = findFace(faces, settings.pumpkins[sel].face);
+  const packList = [builtIn(), ...shownPacks()];
   for (const p of packList) {
     const h = document.createElement('h2');
     h.append(document.createTextNode(p.name));
-    if (p.id !== builtIn().id) {
+    if (folderPacks.includes(p)) h.append(Object.assign(document.createElement('small'), { textContent: ' from the packs folder' }));
+    else if (p.id !== builtIn().id) {
       const rm = Object.assign(document.createElement('button'), { type: 'button', className: 'danger', textContent: 'Remove' });
       rm.addEventListener('click', () => {
-        packs = removePack(packs, p.id); savePacks(packs); faces = allFaces(packs); renderFaces(); toast('Removed ' + p.name);
+        packs = removePack(packs, p.id); savePacks(packs); faces = allFaces(shownPacks()); renderFaces(); toast('Removed ' + p.name);
       });
       h.append(rm);
     }
@@ -69,7 +93,7 @@ function renderFaces() {
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'face' });
       b.setAttribute('aria-pressed', String(e.key === cur.key));
       b.append(thumb(e), document.createTextNode(e.face.name));
-      b.addEventListener('click', () => { settings.face = e.key; persist(); renderFaces(); });
+      b.addEventListener('click', () => { settings.pumpkins[sel].face = e.key; persist(); renderFaces(); renderPumpkins(); });
       grid.append(b);
     }
     root.append(h, grid);
@@ -83,27 +107,90 @@ $('packfile').addEventListener('change', async () => {
   try {
     if (f.size > MAX_FILE_BYTES) throw new Error('That file is too large');
     const pack = parsePack(await f.text());
-    packs = addPack(packs, pack);
+    packs = addPack(packs, pack, folderPacks);
     if (!savePacks(packs)) toast('Added, but this browser would not keep it');
-    faces = allFaces(packs);
-    settings.face = `${pack.id}/${pack.faces[0].id}`; persist();
-    renderFaces(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
+    faces = allFaces(shownPacks());
+    settings.pumpkins[sel].face = `${pack.id}/${pack.faces[0].id}`; persist();
+    renderFaces(); renderPumpkins(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
   } catch (e) { say(e.message || 'Could not add that pack'); }
 });
 
-if (params.get('pack')) {                           // ?pack=<url>: use a pack for this visit only
-  fetch(params.get('pack')).then((r) => r.text()).then((t) => {
-    const pack = parsePack(t);
-    faces = allFaces([...packs.filter((p) => p.id !== pack.id), pack]);
-    if (!params.get('face')) settings.face = `${pack.id}/${pack.faces[0].id}`;
-    renderFaces();
-  }).catch(() => say('Could not load that pack'));
-}
+loadFolderPacks().then(({ packs: found, problems }) => {      // the packs folder on the server, offered next to the built-in faces
+  if (problems.length) $('packnotice').textContent = 'Some files in the packs folder were skipped:\n' + describeProblems(problems).join('\n');
+  if (!found.length) return;
+  folderPacks = found; faces = allFaces(shownPacks()); renderFaces(); renderPumpkins();
+});
 renderFaces();
+
+// ---------------------------------------------------------------- pumpkins: how many, which voice each listens to
+function renderPumpkins() {
+  $('count').value = String(settings.pumpkins.length);
+  sel = Math.min(sel, settings.pumpkins.length - 1);
+  const root = $('pumpkinlist');
+  root.replaceChildren();
+  settings.pumpkins.forEach((p, i) => {
+    const row = Object.assign(document.createElement('div'), { className: 'prow' });
+    const pick = Object.assign(document.createElement('button'), { type: 'button', className: 'pick', textContent: `${i + 1}. ${findFace(faces, p.face).face.name}` });
+    pick.setAttribute('aria-pressed', String(i === sel));
+    pick.title = 'Edit this pumpkin on the Faces and Layout tabs';
+    pick.addEventListener('click', () => { sel = i; syncControls(); renderFaces(); renderPumpkins(); });
+    const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: p.enabled, title: 'Show this pumpkin' });
+    on.addEventListener('change', () => { p.enabled = on.checked; persist(); });
+    const voice = document.createElement('select');
+    voice.className = 'voice'; voice.title = 'Which voices this pumpkin listens to (Voice bands mode)';
+    for (const [k, name] of Object.entries(VOICE_NAMES)) voice.append(Object.assign(document.createElement('option'), { value: k, textContent: name, selected: k === p.voice }));
+    voice.addEventListener('change', () => { p.voice = voice.value; persist(); });
+    const trim = Object.assign(document.createElement('input'), { type: 'range', min: -20, max: 20, step: 1, value: p.trim, title: 'Level: make this pumpkin more or less sensitive' });
+    trim.className = 'trim'; trim.addEventListener('input', () => { p.trim = +trim.value; persist(); });
+    row.append(on, pick, voice, trim);
+    root.append(row);
+  });
+}
+$('count').addEventListener('change', () => {
+  settings.pumpkins = resize(settings.pumpkins, +$('count').value, aspect(), settings);
+  renderPumpkins(); renderFaces(); persist();
+});
+for (let n = 1; n <= MAX_PUMPKINS; n++) $('count').append(Object.assign(document.createElement('option'), { value: n, textContent: n === 1 ? '1 pumpkin' : `${n} pumpkins` }));
+renderPumpkins();
+$('arrange').addEventListener('click', () => {
+  settings.pumpkins = arrange(settings.pumpkins, aspect(), settings);
+  syncControls(); persist(); toast('Pumpkins re-arranged');
+});
+$('resetskew').addEventListener('click', () => {
+  const p = settings.pumpkins[sel];
+  p.quad = resetSkew(p.quad, aspect());
+  persist(); toast('Skew reset');
+});
 
 // ---------------------------------------------------------------- screens: show the face on other displays
 const screenMode = params.has('screen');                // this page is a display, not the main screen
 if (screenMode) document.body.classList.add('screen');
+
+// ---- output: mirror, flip and keep-awake belong to this device (a screen keeps its own, from ?mirror=1&flip=1&awake=0)
+const output = screenMode ? loadScreenOutput(params) : settings.output;
+applyOutput(output, document.body);
+const wake = createWakeLock(navigator, document);
+let playingNow = false;
+function refreshAwake() { return playingNow && output.keepAwake ? wake.acquire() : wake.release(); }
+wake.onchange = (s) => {
+  const m = awakeMessage(s);
+  $('awakestatus').textContent = m || '';
+  if (m && screenMode) toast(m);
+};
+function setPlaying(on) { playingNow = on; refreshAwake(); }
+for (const el of document.querySelectorAll('[data-path^="output."]')) {
+  el.addEventListener('input', () => { applyOutput(output, document.body); refreshAwake(); });
+}
+function screenKey(e) {                                  // on a display: M mirrors, F flips
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey || e.metaKey || e.altKey || (k !== 'm' && k !== 'f')) return false;
+  const name = k === 'm' ? 'mirror' : 'flip';
+  output[name] = !output[name];
+  applyOutput(output, document.body); saveScreenOutput(output);
+  toast(`${name === 'mirror' ? 'Mirror' : 'Flip'} ${output[name] ? 'on' : 'off'}`);
+  return true;
+}
+addEventListener('pagehide', () => { wake.release(); });
 const mem = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -114,7 +201,7 @@ let relayUrl = null, link = null;
 
 // main screen side
 let admin = mem.get(ADMIN_KEY);                         // {session, key} once a screen has been paired
-let ready = false, screensN = 0, seq = 0, pendingCode = '', shareTimer = 0, sentMouth = null, lastSend = 0;
+let ready = false, screensN = 0, seq = 0, mouthSeq = 0, pendingCode = '', shareTimer = 0, sentMouth = null, lastSend = 0;
 const epoch = Math.floor(Math.random() * 2 ** 30);
 const sayScreens = (m) => { $('screenstatus').textContent = m; };
 function screensText() {
@@ -122,9 +209,9 @@ function screensText() {
 }
 function pushState() {
   if (!ready || screenMode) return;
-  link.send({ action: 'state', state: buildState(settings, findFace(faces, settings.face).face, epoch), n: ++seq });
+  link.send({ action: 'state', state: buildState(settings, (key) => findFace(faces, key).face, epoch), n: ++seq });
 }
-function scheduleShare() { clearTimeout(shareTimer); shareTimer = setTimeout(pushState, 150); }
+function scheduleShare() { if (!shareTimer) shareTimer = setTimeout(() => { shareTimer = 0; pushState(); }, 150); }   // at most every 150 ms, so a drag shows live on the other screens
 
 function startAdminLink() {
   if (!relayUrl || link) return;
@@ -156,7 +243,7 @@ function startAdminLink() {
 }
 
 function pairWith(code) {
-  const c = code.trim().toUpperCase();
+  const c = code.toUpperCase().replace(/[^A-Z0-9]/g, '');   // the TV shows "ABC DEF"; spaces and dashes are fine
   if (c.length !== 6) { sayScreens('The code has 6 letters and numbers.'); return; }
   pendingCode = c; sayScreens('Connecting…');
   if (!link) startAdminLink();
@@ -172,8 +259,9 @@ $('endshare').addEventListener('click', () => {
 });
 
 // display side
-let display = null, curEpoch = -1, lastState = -1, lastMouthN = -1;
-const target = { open: 0, bright: 0.5, energy: 0 }, shown = { open: 0, bright: 0.5, energy: 0 };
+let bannerTimer = 0;
+let display = null, curEpoch = -1, lastState = -1;
+const follow = createFollow();                        // the mouths a screen shows: latest frame, eased, closed when the controller is gone or silent
 function showPairBox(code, msg) {
   $('pairbox').hidden = false;
   $('paircode').textContent = code ? code.slice(0, 3) + ' ' + code.slice(3) : '';
@@ -184,6 +272,8 @@ function startDisplayLink() {
   let again = 0;
   link = new Link(relayUrl, {
     open() {
+      clearTimeout(bannerTimer); $('banner').hidden = true;
+      setPlaying(true);                               // a display is a pure screen: awake while connected
       const s = mem.get(SCREEN_KEY);
       link.send(s ? { action: 'screen', session: s.session } : { action: 'register' });
     },
@@ -199,29 +289,47 @@ function startDisplayLink() {
       } else if (m.type === 'state') {
         const st = parseState(m.state);
         if (!st) return;
-        if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; lastMouthN = -1; }
+        if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; follow.reset(); }
         if (!isNewer(m.n, lastState)) return;
         if (Number.isInteger(m.n)) lastState = m.n;
         display = st; $('pairbox').hidden = true;
-      } else if (m.type === 'm') {
-        const v = unpackMouth(m.v);
-        if (!v || !isNewer(m.n, lastMouthN)) return;
-        if (Number.isInteger(m.n)) lastMouthN = m.n;
-        Object.assign(target, v);
+      } else if (m.type === 'admin_gone') {
+        follow.adminGone();
+      } else if (m.type === 'admin_back') {
+        follow.adminBack();
       } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
         mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
       }
     },
-    close() { if (!display) showPairBox('', 'Connecting…'); },
+    close() {
+      if (!display) showPairBox('', 'Connecting… If this stays here, check that Funny Faces is still running on the computer and that the computer is awake.');
+      else { clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { $('banner').hidden = false; }, 2000); }
+    },
+    binary(data) { const f = parseMouth(data); if (f) follow.apply(f, performance.now()); },
   });
   link.start();
 }
 
+// The address (and QR code) a screen should open, with its mirror and flip options added.
+let tvUrls = [];
+function renderTvAddress() {
+  const opts = { mirror: $('tvmirror').checked, flip: $('tvflip').checked }, addr = screenAddress(tvUrls[0], opts);
+  $('tvurl').textContent = addr;
+  try { $('qr').innerHTML = qrSvg(addr); } catch { $('qr').replaceChildren(); /* too long for a QR: the text is still there */ }
+  $('tvother').textContent = tvUrls.length > 1 ? 'If that does not work, try: ' + tvUrls.slice(1).map((u) => screenAddress(u, opts)).join('  or  ') : '';
+}
+for (const id of ['tvmirror', 'tvflip']) $(id).addEventListener('change', () => { if (tvUrls.length) renderTvAddress(); });
+
 async function initRelay() {
   const cfg = await loadConfig();
   relayUrl = cfg && cfg.relay;
+  if (cfg && cfg.info && cfg.info.urls.length) {
+    tvUrls = cfg.info.urls;
+    renderTvAddress();
+    $('tvurlrow').hidden = false;
+  }
   if (screenMode) {
-    if (!relayUrl) showPairBox('', 'Screens need the hosted version of this page.');
+    if (!relayUrl) showPairBox('', 'This page needs to be opened from Funny Faces on your computer.');
     else { showPairBox('', 'Connecting…'); startDisplayLink(); }
     return;
   }
@@ -239,67 +347,86 @@ function showTab(name) {
 for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
 
 // ---------------------------------------------------------------- audio
-let audio = null, voice = null, live = null, stream = null, el = null;
-const audioUrl = globalThis.FACE_MIC_ONLY ? null : params.get('audio');
+let audio = null, source = null, live = null, stream = null, el = null, tabStop = null;
+const mouths = new Mouths();
 function ensureAudio() {
-  if (!audio) { audio = new AudioContext(); live = voice = new LiveVoice(audio); }
+  if (!audio) { audio = new AudioContext(); live = source = new LiveSource(audio); }
   if (audio.state === 'suspended') audio.resume();
 }
 function stopSources() {
+  if (tabStop) { tabStop(); tabStop = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (el) { el.pause(); el = null; }
-  if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } voice = live; }
+  if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } source = live; }
 }
-// A file or link is analysed once, in this browser, into a mouth track; if that fails the sound is analysed live instead.
-const trackCache = new Map();                              // url and option -> track, so pressing Play again does not re-analyse
-async function playTrack(url, label, bytes) {
+// A chosen file is analysed once, in this browser, into a mouth track; if that fails the sound is analysed live instead.
+const trackCache = new Map();                              // file name, size and option -> track, so a second play does not re-analyse
+async function playFile(file) {
   ensureAudio();
+  const url = URL.createObjectURL(file), label = file.name;
   try {
-    const key = url + '|' + $('centre').checked;
+    const key = `${file.name}|${file.size}|${file.lastModified}|${$('centre').checked}`;
     let track = trackCache.get(key);
     if (!track) {
-    say('Analysing ' + label + '…');
-    const buf = await audio.decodeAudioData(bytes ? await bytes() : await (await fetch(url)).arrayBuffer());
-    const mid = new Float32Array(buf.length), side = buf.numberOfChannels > 1 ? new Float32Array(buf.length) : null;
-    const a = buf.getChannelData(0), b = side ? buf.getChannelData(1) : null;
-    for (let i = 0; i < mid.length; i++) { mid[i] = b ? (a[i] + b[i]) / 2 : a[i]; if (side) side[i] = (a[i] - b[i]) / 2; }
-    track = await analyze({ mid, side, sampleRate: buf.sampleRate }, { centre: $('centre').checked, gate: settings.gate,
-      onProgress: (p) => say(`Analysing ${label}… ${Math.round(p * 100)}%`) });
-    trackCache.set(key, track);
+      say('Analysing ' + label + '…');
+      const buf = await audio.decodeAudioData(await file.arrayBuffer());
+      const mid = new Float32Array(buf.length), side = buf.numberOfChannels > 1 ? new Float32Array(buf.length) : null;
+      const a = buf.getChannelData(0), b = side ? buf.getChannelData(1) : null;
+      for (let i = 0; i < mid.length; i++) { mid[i] = b ? (a[i] + b[i]) / 2 : a[i]; if (side) side[i] = (a[i] - b[i]) / 2; }
+      track = await analyze({ mid, side, sampleRate: buf.sampleRate }, { centre: $('centre').checked, gate: settings.adv.gate,
+        onProgress: (p) => say(`Analysing ${label}… ${Math.round(p * 100)}%`) });
+      trackCache.set(key, track);
     }
     stopSources();
     el = new Audio(url);
-    el.crossOrigin = 'anonymous';
-    el.loop = params.get('loop') !== '0';
-    voice = new TrackVoice(track, () => (el ? el.currentTime : 0));
+    el.loop = true;
+    source = new TrackSource(track, () => (el ? el.currentTime : 0));
     await el.play();
+    setPlaying(true);
+    $('firsthint').hidden = true;
     say('Playing ' + label + ' with a mouth track (' + Math.round(track.data.length / 2 / track.fps) + ' s analysed)');
     return true;
-  } catch { return playUrl(url, label); }
+  } catch { return playLive(url, label); }
 }
-function playUrl(url, label) {
+function playLive(url, label) {
   ensureAudio(); stopSources();
   el = new Audio(url);
-  el.crossOrigin = 'anonymous';
-  el.loop = params.get('loop') !== '0';
+  el.loop = true;
   const src = audio.createMediaElementSource(el);
-  voice.connect(src);
+  live.connect(src);
   src.connect(audio.destination);
-  return el.play().then(() => { say('Playing ' + label); return true; }, () => false);
+  return el.play().then(() => { setPlaying(true); say('Playing ' + label); return true; }, () => false);
 }
 async function useMic() {
   try {
     ensureAudio(); stopSources();
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    voice.connect(audio.createMediaStreamSource(stream));
+    live.connect(audio.createMediaStreamSource(stream));
+    $('firsthint').hidden = true;
+    setPlaying(true);
     say('Listening to the microphone');
   } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
 }
 $('mic').addEventListener('click', () => useMic().catch(() => {}));
+// Sound from another tab: the tab plays its own sound, so it feeds the analyser only, never the speakers.
+async function useTab() {
+  try {
+    ensureAudio(); stopSources();
+    const cap = await captureTabAudio({ mediaDevices: navigator.mediaDevices, MediaStream }, {
+      onEnded: () => { stopSources(); say('Tab sharing stopped'); },
+    });
+    tabStop = cap.stop; stream = cap.stream;
+    live.connect(audio.createMediaStreamSource(stream));
+    $('firsthint').hidden = true;
+    say('Listening to the shared tab');
+  } catch (e) { say(e.code ? TAB_AUDIO_MESSAGES[e.code] : 'Could not capture the tab sound'); throw e; }
+}
+if (tabAudioSupported()) $('tab').addEventListener('click', () => useTab().catch(() => {}));
+else { $('tab').hidden = true; $('tabnote').hidden = false; }
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
   if (!f) return;
-  playTrack(URL.createObjectURL(f), f.name, () => f.arrayBuffer()).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
+  playFile(f).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
 });
 
 // ---------------------------------------------------------------- menu and full screen
@@ -309,9 +436,7 @@ const menuOpen = () => !nav.classList.contains('hidden');
 function showMenu(on) { nav.classList.toggle('hidden', !on); if (on) $('play').focus(); }
 
 async function start() {
-  if (audioUrl) {
-    if (!(await playTrack(audioUrl, 'the audio'))) { say('The audio could not be played'); return; }
-  } else if (!stream && !el) {
+  if (!stream && !el) {
     try { await useMic(); } catch { return; }        // the status line says why
   } else if (el) {
     await el.play().catch(() => {});
@@ -325,14 +450,45 @@ $('fs').addEventListener('click', () => {
   document.documentElement.requestFullscreen().catch(() => {});
 });
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
-if (audioUrl && !screenMode) playTrack(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
 
 // ---------------------------------------------------------------- size and move
+// With edit mode off, drag, pinch, wheel and arrows move and resize the whole group (every pumpkin's quad together).
+// With edit mode on, editor.js moves, warps and zooms one pumpkin.
+const groupQuads = () => settings.pumpkins.map((p) => p.quad);
+/** Place the whole group: x and y as before (-1 to 1 across the stage), size as a multiple of the default. */
+function setGroup({ x, y, size }) {
+  const A = aspect(), c = [0.5 + settings.x / 2, 0.5 + settings.y / 2];
+  let quads = groupQuads();
+  if (size !== settings.size) {
+    const scaled = scaleAll(quads, size / settings.size, c, A);
+    if (scaled === quads) size = settings.size;                  // it would not fit: stay as we were
+    quads = scaled;
+  }
+  const moved = moveAll(quads, (x - settings.x) / 2, (y - settings.y) / 2);
+  settings.pumpkins.forEach((p, i) => { p.quad = moved[i]; });
+  Object.assign(settings, { size, x: settings.x + (moved[0][0][0] - quads[0][0][0]) * 2, y: settings.y + (moved[0][0][1] - quads[0][0][1]) * 2 });
+}
+const groupBy = (f) => { setGroup({ x: settings.x, y: settings.y, size: settings.size, ...f(settings) }); syncControls(); persist(); };
+for (const k of ['size', 'x', 'y']) $(k).addEventListener('input', () => groupBy(() => ({ [k]: +$(k).value })));
+
+const editor = createEditor({
+  canvas, overlay: $('overlay'), pumpkins: () => settings.pumpkins,
+  sel: () => sel, changed: () => persist(),
+  select(i) { sel = i; syncControls(); renderFaces(); renderPumpkins(); },
+  onMode(on) {
+    $('overlay').hidden = !on; $('edithint').hidden = !on; $('editbtn').textContent = on ? 'Finish editing' : 'Edit pumpkins';
+    canvas.classList.toggle('editing', on);
+    if (on) { showMenu(false); toast('Editing: Esc or E to finish'); }
+  },
+});
+$('editbtn').addEventListener('click', () => { if (!screenMode) editor.toggle(); });
+
 const pointers = new Map();
 let moved = 0, pinch = 0;
 const goFull = () => document.documentElement.requestFullscreen().catch(() => {});
 canvas.addEventListener('pointerdown', (e) => {
   if (screenMode) { goFull(); return; }              // a display only needs a tap to go full screen
+  if (editor.on) return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   moved = 0; pinch = 0;
@@ -340,39 +496,44 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
-  if (!p) return;
+  if (!p || editor.on) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
   moved += Math.abs(dx) + Math.abs(dy);
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinch) Object.assign(settings, scale(settings, d / pinch));
+    if (pinch) groupBy((l) => scale(l, d / pinch));
     pinch = d;
   } else if (pointers.size === 1) {
-    Object.assign(settings, drag(settings, dx, dy, innerWidth, innerHeight));
+    const [sx, sy] = viewDelta(dx, dy, editor.flags());          // a mirrored or flipped page drags the way you see it
+    groupBy((l) => drag(l, sx, sy, innerWidth, innerHeight));
   }
-  syncControls(); persist();
 });
 function endPointer(e) {
   pointers.delete(e.pointerId); pinch = 0;
   if (!pointers.size) {
     canvas.classList.remove('dragging');
-    if (moved < 6 && e.type === 'pointerup') showMenu(!menuOpen());   // a tap shows or hides the menu
+    if (!editor.on && moved < 6 && e.type === 'pointerup') showMenu(!menuOpen());   // a tap shows or hides the menu
   }
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
-  if (screenMode) return;
+  if (screenMode || editor.on) return;
   e.preventDefault();
-  Object.assign(settings, scale(settings, Math.exp(-e.deltaY * 0.0015)));
-  syncControls(); persist();
+  groupBy((l) => scale(l, Math.exp(-e.deltaY * 0.0015)));
 }, { passive: false });
-$('reset').addEventListener('click', () => { Object.assign(settings, { x: 0, y: 0, size: 0.8 }); syncControls(); persist(); });
+$('reset').addEventListener('click', () => groupBy(() => ({ x: 0, y: 0, size: 0.8 })));
 
 addEventListener('keydown', (e) => {
-  if (screenMode) { if (e.key === 'Enter') goFull(); return; }
+  if (screenMode) { if (screenKey(e)) return; if (e.key === 'Enter') goFull(); return; }
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox';
+  if (editor.on) {
+    if (e.key === 'Escape' || ((e.key === 'e' || e.key === 'E') && !typing && !e.metaKey && !e.ctrlKey)) { editor.setOn(false); e.preventDefault(); return; }
+    if (typing || menuOpen() && e.target !== document.body) return;
+    if (editor.key(e)) return;
+  } else if ((e.key === 'e' || e.key === 'E') && !typing && !e.metaKey && !e.ctrlKey) { editor.setOn(true); return; }
   if (menuOpen()) {
     if (e.key === 'Escape') showMenu(false);
     return;                                           // let the menu use its own keys
@@ -381,39 +542,39 @@ addEventListener('keydown', (e) => {
   const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
   if (arrows[e.key]) {
     e.preventDefault();
-    const [dx, dy] = arrows[e.key];
-    if (mode === 'move') Object.assign(settings, nudge(settings, dx, dy));
-    else if (dy) Object.assign(settings, scale(settings, dy < 0 ? 1.05 : 1 / 1.05));
-    syncControls(); persist();
+    const [dx, dy] = viewDelta(...arrows[e.key], editor.flags());
+    if (mode === 'move') groupBy((l) => nudge(l, dx, dy));
+    else if (dy) groupBy((l) => scale(l, dy < 0 ? 1.05 : 1 / 1.05));
   } else if (e.key === 'Enter') {
     e.preventDefault();
     mode = mode === 'move' ? 'size' : 'move';
     toast(mode === 'move' ? 'Arrows move the face' : 'Up and down resize the face');
-  } else if (e.key === '+' || e.key === '=') { Object.assign(settings, scale(settings, 1.05)); syncControls(); persist(); }
-  else if (e.key === '-') { Object.assign(settings, scale(settings, 1 / 1.05)); syncControls(); persist(); }
+  } else if (e.key === '+' || e.key === '=') groupBy((l) => scale(l, 1.05));
+  else if (e.key === '-') groupBy((l) => scale(l, 1 / 1.05));
   else if (e.key === 'Escape' || e.key === 'ContextMenu' || e.key === 'Backspace' || e.key === 'm') showMenu(true);
 });
 
 // ---------------------------------------------------------------- drawing
-function fit() {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-}
-let last = performance.now(), blinkAt = 2, blink = 0;
+let last = performance.now();
+const benching = params.has('bench');            // ?bench=1: measure drawing speed (see bench.js)
+if (benching) runBench(stage, findFace(faces, 'starter/flames').face, params);
+const meterFill = document.querySelector('#meter i');
+const enabledPumpkins = () => settings.pumpkins.filter((p) => p.enabled);
 
 // The voice is measured and sent from a timer, not from the drawing loop: a browser stops the drawing loop in a
 // hidden tab, which would stop the other screens' mouths. A worker's timer is not slowed down in the background.
-let lastMouth = { open: 0, bright: 0.5, energy: 0 }, tickAt = performance.now();
+let lastMouths = [], tickAt = performance.now();
 function tick() {
-  if (screenMode || !voice) return;
+  if (screenMode || !source) return;
   const now = performance.now(), dt = Math.min(0.1, (now - tickAt) / 1000);
   tickAt = now;
-  voice.sens = settings.sens; voice.gate = settings.gate;
-  lastMouth = voice.update(dt);
+  lastMouths = mouths.update(source.frame(), dt, now / 1000, settings, enabledPumpkins());
   if (ready && screensN > 0 && now - lastSend >= 66) {
-    const v = packMouth(lastMouth);
-    if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
+    const v = packMouth(lastMouths), since = now - lastSend;
+    // Send when it changed, and every 400 ms while a mouth is open even if it did not (a held vowel): a screen closes a mouth it has not heard about for 1.5 s.
+    if (changed(sentMouth, v) || (since >= 400 && v.some((x, i) => i % 3 !== 1 && x > 0))) {
+      link.send(mouthFrame(mouthSeq, v)); mouthSeq = (mouthSeq + 1) & 0xffff; sentMouth = v; lastSend = now;
+    }
   }
 }
 try {
@@ -421,32 +582,34 @@ try {
   w.onmessage = tick;
 } catch { setInterval(tick, 33); }
 
+// The next frame is always requested first, and a failure while drawing is reported once instead of stopping the loop.
+let frameFault = '';
 function frame(now) {
+  requestAnimationFrame(frame);
+  try { draw(now); frameFault = ''; }
+  catch (e) {
+    const msg = String(e && e.message || e);
+    if (msg !== frameFault) { frameFault = msg; console.error('Drawing failed:', e); }
+  }
+}
+
+function draw(now) {
+  if (benching) return;
+  stage.watch(now - last, now);                       // Auto quality follows the real time between frames
+  stage.setQuality(screenMode ? 'auto' : settings.adv.quality);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
-  let m = { open: 0, bright: 0.5, energy: 0 };
+  let list, look, ms;
   if (screenMode) {                                   // follow what the main screen sent, smoothed between updates
-    const k = Math.min(1, dt * 18);
-    for (const key of ['open', 'bright', 'energy']) shown[key] += (target[key] - shown[key]) * k;
-    m = shown;
-  } else if (voice) {
-    m = lastMouth;                                     // measured by the timer below, which keeps running in a hidden tab
+    ms = follow.tick(dt, now);
+    list = display && display.pumpkins; look = display;
+  } else {
+    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
+    look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;
+    meterFill.style.width = Math.round(Math.min(1, Math.max(0, ...ms.map((m) => m.energy)) * 1.4) * 100) + '%';
   }
-  if (t > blinkAt) { blink = 1; blinkAt = t + 2 + Math.random() * 4; }
-  blink = Math.max(0, blink - dt * 7);
-  const look = screenMode ? display : settings;
-  const faceObj = screenMode ? (display && display.face) : findFace(faces, settings.face).face;
-  if (faceObj) {
-    drawFace(fctx, faceObj, FACE_PX, { open: m.open, bright: m.bright, blink: blink > 0.5 ? 1 : blink * 2,
-      energy: m.energy, color: look.color, glow: look.glow, alpha: 1, time: t });
-  }
-  fit();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (faceObj) {
-    const p = placement(canvas.width, canvas.height, look);
-    ctx.drawImage(face, p.left, p.top, p.s, p.s);
-  }
-requestAnimationFrame(frame);
+  if (list && list.length) stage.draw(list, ms, look, t, dt);
+  else stage.clear();
+  editor.draw();
 }
 requestAnimationFrame(frame);

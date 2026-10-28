@@ -31,8 +31,9 @@ export function parsePack(text) {
 }
 
 /** Add or replace (same id) and return the new list. The built-in pack id is reserved. */
-export function addPack(packs, pack) {
+export function addPack(packs, pack, folderPacks = []) {
   if (pack.id === builtIn().id) throw new Error('That pack id is reserved; change "id" in the file');
+  if (folderPacks.some((p) => p.id === pack.id)) throw new Error('A pack in the packs folder already uses that id; change "id" in the file');
   const rest = packs.filter((p) => p.id !== pack.id);
   if (rest.length >= MAX_PACKS) throw new Error('Too many packs; remove one first');
   return [...rest, pack];
@@ -51,3 +52,39 @@ export function allFaces(packs) {
 export function findFace(list, key) {
   return list.find((e) => e.key === key) || list.find((e) => e.face.id === key) || list[0];
 }
+
+/** Packs to show after the built-in one: the stored ones, minus any whose id a folder pack (or the built-in) uses, then the folder's. */
+export function mergePacks(stored, folderPacks) {
+  const taken = new Set([builtIn().id, ...folderPacks.map((p) => p.id)]);
+  return [...stored.filter((p) => !taken.has(p.id)), ...folderPacks];
+}
+
+/**
+ * Ask the server for the packs folder. Every file is validated; a bad one is skipped and listed in `problems`
+ * ({file, reason}). A server without the folder API (or none at all) simply gives nothing.
+ */
+export async function loadFolderPacks(fetchFn = globalThis.fetch) {
+  const packs = [], problems = [];
+  let list;
+  try {
+    const r = await fetchFn('/api/packs');
+    if (!r.ok) return { packs, problems };
+    list = await r.json();
+  } catch { return { packs, problems }; }
+  for (const s of Array.isArray(list && list.skipped) ? list.skipped : []) problems.push({ file: String(s.file), reason: String(s.reason) });
+  const ids = new Map();
+  for (const file of (Array.isArray(list && list.files) ? list.files : []).filter((f) => typeof f === 'string').slice(0, MAX_PACKS)) {
+    try {
+      const r = await fetchFn('/api/packs/' + encodeURIComponent(file));
+      if (!r.ok) throw new Error('could not be read');
+      const pack = parsePack(await r.text());
+      if (pack.id === builtIn().id) throw new Error('its "id" is reserved for the built-in faces; change "id" in the file');
+      if (ids.has(pack.id)) throw new Error(`its "id" is already used by ${ids.get(pack.id)}`);
+      ids.set(pack.id, file); packs.push(pack);
+    } catch (e) { problems.push({ file, reason: e.message || 'is not a valid face pack' }); }
+  }
+  return { packs, problems };
+}
+
+/** One line per problem, for the notice on the Faces tab. */
+export const describeProblems = (problems) => problems.map((p) => `${p.file}: ${p.reason}`);
