@@ -125,6 +125,17 @@ These options belong to each device, so the projector's own page can have them w
   secure page (`localhost` or `https`); over plain `http` on a TV it is usually not available, and the page says so.
   In that case turn off the TV or projector's own sleep timer.
 
+## Lining up with real pumpkins
+
+Each pumpkin sits on its own four-corner shape, so you can fit a projected face onto a real pumpkin.
+
+1. Project full screen, then press **E** (or **Edit pumpkins** on the Layout tab). The menu hides and handles appear on the picked pumpkin.
+2. Drag a pumpkin to move it. Drag a corner to skew it (the face tilts in perspective). Drag a side dot to stretch it that way. The top dot rotates, the bottom ring zooms. The mouse wheel zooms the pumpkin under the pointer. Two fingers pinch it on a touch screen.
+3. Tab picks the next pumpkin, the arrow keys nudge (Shift for bigger steps), + and - zoom, R resets the skew.
+4. Press **E** or **Esc** to finish. M brings the menu back.
+
+Layout tab: **Reset skew** squares up the picked pumpkin, **Re-arrange all pumpkins** puts them back in a row, and the Size, Left / right and Up / down sliders move and resize all of them together. Screens added from the Screens tab draw the same shapes. A browser without WebGL2 draws faces flat: they still move, zoom and rotate, but skew has no perspective.
+
 ## Kiosk and Fire TV use
 
 For a screen that only shows the faces, open `/screen` on it and pair it with the code (see above). It goes full screen

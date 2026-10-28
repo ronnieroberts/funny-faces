@@ -1,4 +1,5 @@
 // Everything is kept in this browser only. Nothing is sent anywhere.
+import { gridQuads, sanitizeQuad } from './quad.js';
 const KEY = 'face-characters.settings.v1';
 export const MAX_PUMPKINS = 8;
 export const MODES = ['sync', 'bands', 'turns', 'random'];
@@ -9,10 +10,23 @@ const DEFAULT_FACES = ['starter/classic', 'starter/round', 'starter/cat', 'start
 
 export const ADV_DEFAULTS = { inputDb: 0, outputGain: 1, gate: 0.35, snap: 0.6, voiceFocus: 0.3, shapeDetail: 1, idleDim: 0.5 };
 
-export function newPumpkin(i = 0) {
-  return { face: DEFAULT_FACES[i % 8], voice: 'full', trim: 0, enabled: true, dx: 0, dy: 0, scale: 1, color: '' };
+/** Aspect (width / height) the default quads are made for when the real window is not known. */
+export const DEFAULT_ASPECT = 16 / 9;
+const GROUP = { x: 0, y: 0, size: 0.8 };
+
+/** quad: corners TL, TR, BR, BL as fractions of the stage (see quad.js). */
+export function newPumpkin(i = 0, A = DEFAULT_ASPECT) {
+  return { face: DEFAULT_FACES[i % 8], voice: 'full', trim: 0, enabled: true, quad: gridQuads(1, A, GROUP)[0], color: '' };
 }
-export const defaultPumpkins = (n) => Array.from({ length: n }, (_, i) => ({ ...newPumpkin(i), voice: n > 1 ? DEFAULT_VOICES[i % 8] : 'full' }));
+export const defaultPumpkins = (n, A = DEFAULT_ASPECT) => {
+  const quads = gridQuads(n, A, GROUP);
+  return Array.from({ length: n }, (_, i) => ({ ...newPumpkin(i, A), quad: quads[i], voice: n > 1 ? DEFAULT_VOICES[i % 8] : 'full' }));
+};
+/** Put every pumpkin back in the default row or grid (keeps faces and everything else). The group x, y and size place it. */
+export function arrange(pumpkins, A = DEFAULT_ASPECT, group = GROUP) {
+  const quads = gridQuads(pumpkins.length, A, group);
+  return pumpkins.map((p, i) => ({ ...p, quad: quads[i] }));
+}
 
 export const DEFAULTS = {
   color: '#ff8a1f', glow: 0.8, x: 0, y: 0, size: 0.8,
@@ -25,13 +39,13 @@ export const DEFAULTS = {
 const num = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const color = (v) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : '');
 
-function pumpkin(o, i) {
+function pumpkin(o, i, quad) {
   const d = newPumpkin(i), p = o && typeof o === 'object' ? o : {};
   return {
     face: typeof p.face === 'string' && p.face.length <= 130 ? p.face : d.face,
     voice: Object.hasOwn(VOICE_NAMES, p.voice) ? p.voice : d.voice,
     trim: num(p.trim, -20, 20, 0), enabled: p.enabled !== false,
-    dx: num(p.dx, -2, 2, 0), dy: num(p.dy, -2, 2, 0), scale: num(p.scale, 0.2, 3, 1), color: color(p.color),
+    quad, color: color(p.color),
   };
 }
 
@@ -41,7 +55,8 @@ export function sanitizeOutput(o) {
   return { mirror: v.mirror === true, flip: v.flip === true, keepAwake: v.keepAwake !== false };
 }
 
-export function sanitize(o) {
+/** A is the stage's width / height; it only matters for pumpkins that have no quad yet. */
+export function sanitize(o, A = DEFAULT_ASPECT) {
   const s = structuredClone(DEFAULTS);
   if (!o || typeof o !== 'object') return s;
   s.color = color(o.color) || DEFAULTS.color;
@@ -59,19 +74,23 @@ export function sanitize(o) {
   };
   s.output = sanitizeOutput(o.output);
   const list = Array.isArray(o.pumpkins) ? o.pumpkins.slice(0, MAX_PUMPKINS) : [];
-  s.pumpkins = list.length ? list.map(pumpkin) : [pumpkin({ face: typeof o.face === 'string' ? o.face : undefined }, 0)];
+  const src = list.length ? list : [{ face: typeof o.face === 'string' ? o.face : undefined }];
+  // Settings saved before quads: place them from the group x, y, size and each pumpkin's old dx, dy, scale.
+  const adj = src.map((p) => ({ dx: num(p && p.dx, -2, 2, 0), dy: num(p && p.dy, -2, 2, 0), scale: num(p && p.scale, 0.2, 3, 1) }));
+  const grid = gridQuads(src.length, A, s, adj);
+  s.pumpkins = src.map((p, i) => pumpkin(p, i, sanitizeQuad(p && p.quad, A) || grid[i]));
   return s;
 }
 
 /** Make the list n long, keeping what is there and adding sensible new ones. */
-export function resize(pumpkins, n) {
+export function resize(pumpkins, n, A = DEFAULT_ASPECT, group = GROUP) {
   n = Math.max(1, Math.min(MAX_PUMPKINS, Math.round(n)));
-  const base = defaultPumpkins(Math.max(n, 2));
-  return Array.from({ length: n }, (_, i) => pumpkins[i] || base[i]);
+  const base = defaultPumpkins(Math.max(n, 2), A);
+  return arrange(Array.from({ length: n }, (_, i) => pumpkins[i] || base[i]), A, group);   // a new count means a new row
 }
 
-export function load(storage = globalThis.localStorage) {
-  try { return sanitize(JSON.parse(storage.getItem(KEY))); } catch { return sanitize(null); }
+export function load(storage = globalThis.localStorage, A = DEFAULT_ASPECT) {
+  try { return sanitize(JSON.parse(storage.getItem(KEY)), A); } catch { return sanitize(null, A); }
 }
 
 export function save(s, storage = globalThis.localStorage) {
