@@ -1,6 +1,7 @@
 import { drawFace } from './facepack.js';
 import { LiveVoice, TrackVoice } from './voice.js';
 import { analyze } from './track.js';
+import { qrSvg } from './qr.js';
 import { load, save } from './settings.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
 import { placement, drag, scale, nudge } from './layout.js';
@@ -172,6 +173,7 @@ $('endshare').addEventListener('click', () => {
 });
 
 // display side
+let bannerTimer = 0;
 let display = null, curEpoch = -1, lastState = -1, lastMouthN = -1;
 const target = { open: 0, bright: 0.5, energy: 0 }, shown = { open: 0, bright: 0.5, energy: 0 };
 function showPairBox(code, msg) {
@@ -184,6 +186,7 @@ function startDisplayLink() {
   let again = 0;
   link = new Link(relayUrl, {
     open() {
+      clearTimeout(bannerTimer); $('banner').hidden = true;
       const s = mem.get(SCREEN_KEY);
       link.send(s ? { action: 'screen', session: s.session } : { action: 'register' });
     },
@@ -212,7 +215,10 @@ function startDisplayLink() {
         mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
       }
     },
-    close() { if (!display) showPairBox('', 'Connecting…'); },
+    close() {
+      if (!display) showPairBox('', 'Connecting… If this stays here, check that Funny Faces is still running on the computer and that the computer is awake.');
+      else { clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { $('banner').hidden = false; }, 2000); }
+    },
   });
   link.start();
 }
@@ -221,7 +227,10 @@ async function initRelay() {
   const cfg = await loadConfig();
   relayUrl = cfg && cfg.relay;
   if (cfg && cfg.info && cfg.info.urls.length) {
-    $('tvurl').textContent = cfg.info.urls[0] + '/screen';
+    const addr = cfg.info.urls[0] + '/screen';
+    $('tvurl').textContent = addr;
+    try { $('qr').innerHTML = qrSvg(addr); } catch { /* too long for a QR: the text is still there */ }
+    if (cfg.info.urls.length > 1) $('tvother').textContent = 'If that does not work, try: ' + cfg.info.urls.slice(1).map((u) => u + '/screen').join('  or  ');
     $('tvurlrow').hidden = false;
   }
   if (screenMode) {
@@ -277,6 +286,7 @@ async function playTrack(url, label, bytes) {
     el.loop = params.get('loop') !== '0';
     voice = new TrackVoice(track, () => (el ? el.currentTime : 0));
     await el.play();
+    $('firsthint').hidden = true;
     say('Playing ' + label + ' with a mouth track (' + Math.round(track.data.length / 2 / track.fps) + ' s analysed)');
     return true;
   } catch { return playUrl(url, label); }
@@ -296,6 +306,7 @@ async function useMic() {
     ensureAudio(); stopSources();
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     voice.connect(audio.createMediaStreamSource(stream));
+    $('firsthint').hidden = true;
     say('Listening to the microphone');
   } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
 }
@@ -405,6 +416,7 @@ function fit() {
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 }
 let last = performance.now(), blinkAt = 2, blink = 0;
+const meterFill = document.querySelector('#meter i');
 
 // The voice is measured and sent from a timer, not from the drawing loop: a browser stops the drawing loop in a
 // hidden tab, which would stop the other screens' mouths. A worker's timer is not slowed down in the background.
@@ -434,7 +446,8 @@ function frame(now) {
     for (const key of ['open', 'bright', 'energy']) shown[key] += (target[key] - shown[key]) * k;
     m = shown;
   } else if (voice) {
-    m = lastMouth;                                     // measured by the timer below, which keeps running in a hidden tab
+    m = lastMouth;
+    meterFill.style.width = Math.round(Math.min(1, m.energy * 1.4) * 100) + '%';                                     // measured by the timer below, which keeps running in a hidden tab
   }
   if (t > blinkAt) { blink = 1; blinkAt = t + 2 + Math.random() * 4; }
   blink = Math.max(0, blink - dt * 7);

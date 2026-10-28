@@ -1,7 +1,8 @@
 // Start Funny Faces:  node server/main.js     (settings come from environment variables, all optional)
 //   PORT=8765   HOST=0.0.0.0   FACES_DATA=./data   FACES_LAN_CONTROL=1 (let other devices open the control page, with a password)
-//   FACES_NO_BUILD=1 skips rebuilding the page (the Docker image builds it once)
-import { execFileSync } from 'node:child_process';
+//   FACES_NO_BUILD=1 skips rebuilding the page (the Docker image and the downloads build it once)
+//   FACES_OPEN=1 opens the control page in the default browser (the double-click launchers set it)
+import { execFile, execFileSync } from 'node:child_process';
 import { createApp, lanUrls } from './index.js';
 
 const port = Number(process.env.PORT) || 8765;
@@ -24,3 +25,9 @@ if (!urls.length) console.log('  (no network address found: connect to Wi-Fi or 
 if (app.auth.setupCode) console.log(`\n  First-time setup code for the control page on other devices: ${app.auth.setupCode}`);
 console.log('\nOn the TV, open the second address, then type the code it shows into the Screens tab here.');
 console.log('If the TV cannot connect, allow Funny Faces (or "node") through the computer\'s firewall when it asks.\n');
+
+if (process.env.FACES_OPEN === '1') {
+  const url = `http://localhost:${port}/`;
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [url]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : ['xdg-open', [url]];
+  execFile(cmd, args, () => {}).on('error', () => {});             // if it cannot open, the printed address still works
+}

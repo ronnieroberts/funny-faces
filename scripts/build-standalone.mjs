@@ -2,7 +2,7 @@
 // opened straight from a folder (file://). Microphone only: the audio file picker and ?audio= are off.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-const order = ['response.js', 'visemes.js', 'fft.js', 'track.js', 'facepack.js', 'layout.js', 'settings.js', 'packs.js', 'voice.js', 'relay.js', 'share.js', 'app.js'];
+const order = ['response.js', 'visemes.js', 'fft.js', 'track.js', 'qr.js', 'facepack.js', 'layout.js', 'settings.js', 'packs.js', 'voice.js', 'relay.js', 'share.js', 'app.js'];
 const id = (f) => 'M_' + f.replace('.js', '');
 let bundle = '';
 
