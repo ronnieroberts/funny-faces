@@ -134,7 +134,7 @@ GitHub release. The downloads are not code-signed yet, hence the warnings descri
 ## Tests
 
 ```bash
-node --test tests
+npm test
 ```
 
 ## Rules
