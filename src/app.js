@@ -1,19 +1,17 @@
 import { drawFace } from './facepack.js';
-import { LiveVoice, TrackVoice } from './voice.js';
+import { LiveSource, TrackSource, Mouths } from './voice.js';
 import { analyze } from './track.js';
 import { qrSvg } from './qr.js';
-import { load, save } from './settings.js';
+import { load, save, resize, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
+import { Stage } from './stage.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
-import { placement, drag, scale, nudge } from './layout.js';
+import { drag, scale, nudge } from './layout.js';
 import { Link, loadConfig } from './relay.js';
 import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage'), ctx = canvas.getContext('2d');
-const FACE_PX = 960;                              // the face is drawn square, then placed on the window
-const face = document.createElement('canvas');
-face.width = face.height = FACE_PX;
-const fctx = face.getContext('2d');
+const stage = new Stage(canvas);
 
 const settings = load();
 let packs = loadPacks();
@@ -26,22 +24,33 @@ function toast(m) {
 }
 
 // ---------------------------------------------------------------- settings
-let saveTimer = 0;
+let saveTimer = 0, sel = 0;                                   // sel: the pumpkin the Faces and Layout tabs are editing
 function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => save(settings), 250); scheduleShare(); }
-const sliders = ['size', 'x', 'y', 'glow', 'sens', 'gate'];
+const pathOf = (el) => el.dataset.path.replace(/^pk\./, `pumpkins.${sel}.`);
+const getPath = (path) => path.split('.').reduce((a, k) => a[k], settings);
+function setPath(path, v) { const ks = path.split('.'), last = ks.pop(); ks.reduce((a, k) => a[k], settings)[last] = v; }
+const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : '');
 function syncControls() {
-  for (const id of sliders) $(id).value = settings[id];
-  $('color').value = settings.color;
+  for (const el of document.querySelectorAll('[data-path]')) {
+    const v = getPath(pathOf(el));
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  }
+  for (const o of document.querySelectorAll('output[data-for]')) o.textContent = fmt(getPath(pathOf({ dataset: { path: o.dataset.for } })));
+  document.body.dataset.mode = settings.mode;
 }
-for (const id of [...sliders, 'color']) {
-  $(id).addEventListener('input', () => { settings[id] = id === 'color' ? $(id).value : +$(id).value; persist(); });
+for (const el of document.querySelectorAll('[data-path]')) {
+  el.addEventListener('input', () => {
+    setPath(pathOf(el), el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value);
+    syncControls(); persist();
+  });
 }
 if (/^[0-9a-fA-F]{6}$/.test(params.get('color') || '')) settings.color = '#' + params.get('color');
+$('reset-adv').addEventListener('click', () => { Object.assign(settings.adv, ADV_DEFAULTS); syncControls(); persist(); toast('Advanced settings reset'); });
 syncControls();
 
 // ---------------------------------------------------------------- faces and packs
 let faces = allFaces(packs);
-if (params.get('face')) settings.face = params.get('face');
+if (params.get('face')) settings.pumpkins[0].face = params.get('face');
 
 function thumb(entry) {
   const c = document.createElement('canvas');
@@ -53,7 +62,7 @@ function thumb(entry) {
 function renderFaces() {
   const root = $('facelist');
   root.replaceChildren();
-  const cur = findFace(faces, settings.face);
+  const cur = findFace(faces, settings.pumpkins[sel].face);
   const packList = [builtIn(), ...packs];
   for (const p of packList) {
     const h = document.createElement('h2');
@@ -70,7 +79,7 @@ function renderFaces() {
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'face' });
       b.setAttribute('aria-pressed', String(e.key === cur.key));
       b.append(thumb(e), document.createTextNode(e.face.name));
-      b.addEventListener('click', () => { settings.face = e.key; persist(); renderFaces(); });
+      b.addEventListener('click', () => { settings.pumpkins[sel].face = e.key; persist(); renderFaces(); renderPumpkins(); });
       grid.append(b);
     }
     root.append(h, grid);
@@ -87,8 +96,8 @@ $('packfile').addEventListener('change', async () => {
     packs = addPack(packs, pack);
     if (!savePacks(packs)) toast('Added, but this browser would not keep it');
     faces = allFaces(packs);
-    settings.face = `${pack.id}/${pack.faces[0].id}`; persist();
-    renderFaces(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
+    settings.pumpkins[sel].face = `${pack.id}/${pack.faces[0].id}`; persist();
+    renderFaces(); renderPumpkins(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
   } catch (e) { say(e.message || 'Could not add that pack'); }
 });
 
@@ -96,11 +105,46 @@ if (params.get('pack')) {                           // ?pack=<url>: use a pack f
   fetch(params.get('pack')).then((r) => r.text()).then((t) => {
     const pack = parsePack(t);
     faces = allFaces([...packs.filter((p) => p.id !== pack.id), pack]);
-    if (!params.get('face')) settings.face = `${pack.id}/${pack.faces[0].id}`;
+    if (!params.get('face')) settings.pumpkins[0].face = `${pack.id}/${pack.faces[0].id}`;
     renderFaces();
   }).catch(() => say('Could not load that pack'));
 }
 renderFaces();
+
+// ---------------------------------------------------------------- pumpkins: how many, which voice each listens to
+function renderPumpkins() {
+  $('count').value = String(settings.pumpkins.length);
+  sel = Math.min(sel, settings.pumpkins.length - 1);
+  const root = $('pumpkinlist');
+  root.replaceChildren();
+  settings.pumpkins.forEach((p, i) => {
+    const row = Object.assign(document.createElement('div'), { className: 'prow' });
+    const pick = Object.assign(document.createElement('button'), { type: 'button', className: 'pick', textContent: `${i + 1}. ${findFace(faces, p.face).face.name}` });
+    pick.setAttribute('aria-pressed', String(i === sel));
+    pick.title = 'Edit this pumpkin on the Faces and Layout tabs';
+    pick.addEventListener('click', () => { sel = i; syncControls(); renderFaces(); renderPumpkins(); });
+    const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: p.enabled, title: 'Show this pumpkin' });
+    on.addEventListener('change', () => { p.enabled = on.checked; persist(); });
+    const voice = document.createElement('select');
+    voice.className = 'voice'; voice.title = 'Which voices this pumpkin listens to (Voice bands mode)';
+    for (const [k, name] of Object.entries(VOICE_NAMES)) voice.append(Object.assign(document.createElement('option'), { value: k, textContent: name, selected: k === p.voice }));
+    voice.addEventListener('change', () => { p.voice = voice.value; persist(); });
+    const trim = Object.assign(document.createElement('input'), { type: 'range', min: -20, max: 20, step: 1, value: p.trim, title: 'Level: make this pumpkin more or less sensitive' });
+    trim.className = 'trim'; trim.addEventListener('input', () => { p.trim = +trim.value; persist(); });
+    row.append(on, pick, voice, trim);
+    root.append(row);
+  });
+}
+$('count').addEventListener('change', () => {
+  settings.pumpkins = resize(settings.pumpkins, +$('count').value);
+  renderPumpkins(); renderFaces(); persist();
+});
+for (let n = 1; n <= MAX_PUMPKINS; n++) $('count').append(Object.assign(document.createElement('option'), { value: n, textContent: n === 1 ? '1 pumpkin' : `${n} pumpkins` }));
+renderPumpkins();
+$('arrange').addEventListener('click', () => {
+  for (const p of settings.pumpkins) Object.assign(p, { dx: 0, dy: 0, scale: 1 });
+  syncControls(); persist(); toast('Pumpkins re-arranged');
+});
 
 // ---------------------------------------------------------------- screens: show the face on other displays
 const screenMode = params.has('screen');                // this page is a display, not the main screen
@@ -123,7 +167,7 @@ function screensText() {
 }
 function pushState() {
   if (!ready || screenMode) return;
-  link.send({ action: 'state', state: buildState(settings, findFace(faces, settings.face).face, epoch), n: ++seq });
+  link.send({ action: 'state', state: buildState(settings, (key) => findFace(faces, key).face, epoch), n: ++seq });
 }
 function scheduleShare() { clearTimeout(shareTimer); shareTimer = setTimeout(pushState, 150); }
 
@@ -175,7 +219,7 @@ $('endshare').addEventListener('click', () => {
 // display side
 let bannerTimer = 0;
 let display = null, curEpoch = -1, lastState = -1, lastMouthN = -1;
-const target = { open: 0, bright: 0.5, energy: 0 }, shown = { open: 0, bright: 0.5, energy: 0 };
+let target = [], shown = [];
 function showPairBox(code, msg) {
   $('pairbox').hidden = false;
   $('paircode').textContent = code ? code.slice(0, 3) + ' ' + code.slice(3) : '';
@@ -210,7 +254,7 @@ function startDisplayLink() {
         const v = unpackMouth(m.v);
         if (!v || !isNewer(m.n, lastMouthN)) return;
         if (Number.isInteger(m.n)) lastMouthN = m.n;
-        Object.assign(target, v);
+        target = v;
       } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
         mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
       }
@@ -252,52 +296,51 @@ function showTab(name) {
 for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
 
 // ---------------------------------------------------------------- audio
-let audio = null, voice = null, live = null, stream = null, el = null;
-const audioUrl = globalThis.FACE_MIC_ONLY ? null : params.get('audio');
+let audio = null, source = null, live = null, stream = null, el = null;
+const mouths = new Mouths();
 function ensureAudio() {
-  if (!audio) { audio = new AudioContext(); live = voice = new LiveVoice(audio); }
+  if (!audio) { audio = new AudioContext(); live = source = new LiveSource(audio); }
   if (audio.state === 'suspended') audio.resume();
 }
 function stopSources() {
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (el) { el.pause(); el = null; }
-  if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } voice = live; }
+  if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } source = live; }
 }
-// A file or link is analysed once, in this browser, into a mouth track; if that fails the sound is analysed live instead.
-const trackCache = new Map();                              // url and option -> track, so pressing Play again does not re-analyse
-async function playTrack(url, label, bytes) {
+// A chosen file is analysed once, in this browser, into a mouth track; if that fails the sound is analysed live instead.
+const trackCache = new Map();                              // file name, size and option -> track, so a second play does not re-analyse
+async function playFile(file) {
   ensureAudio();
+  const url = URL.createObjectURL(file), label = file.name;
   try {
-    const key = url + '|' + $('centre').checked;
+    const key = `${file.name}|${file.size}|${file.lastModified}|${$('centre').checked}`;
     let track = trackCache.get(key);
     if (!track) {
-    say('Analysing ' + label + '…');
-    const buf = await audio.decodeAudioData(bytes ? await bytes() : await (await fetch(url)).arrayBuffer());
-    const mid = new Float32Array(buf.length), side = buf.numberOfChannels > 1 ? new Float32Array(buf.length) : null;
-    const a = buf.getChannelData(0), b = side ? buf.getChannelData(1) : null;
-    for (let i = 0; i < mid.length; i++) { mid[i] = b ? (a[i] + b[i]) / 2 : a[i]; if (side) side[i] = (a[i] - b[i]) / 2; }
-    track = await analyze({ mid, side, sampleRate: buf.sampleRate }, { centre: $('centre').checked, gate: settings.gate,
-      onProgress: (p) => say(`Analysing ${label}… ${Math.round(p * 100)}%`) });
-    trackCache.set(key, track);
+      say('Analysing ' + label + '…');
+      const buf = await audio.decodeAudioData(await file.arrayBuffer());
+      const mid = new Float32Array(buf.length), side = buf.numberOfChannels > 1 ? new Float32Array(buf.length) : null;
+      const a = buf.getChannelData(0), b = side ? buf.getChannelData(1) : null;
+      for (let i = 0; i < mid.length; i++) { mid[i] = b ? (a[i] + b[i]) / 2 : a[i]; if (side) side[i] = (a[i] - b[i]) / 2; }
+      track = await analyze({ mid, side, sampleRate: buf.sampleRate }, { centre: $('centre').checked, gate: settings.adv.gate,
+        onProgress: (p) => say(`Analysing ${label}… ${Math.round(p * 100)}%`) });
+      trackCache.set(key, track);
     }
     stopSources();
     el = new Audio(url);
-    el.crossOrigin = 'anonymous';
-    el.loop = params.get('loop') !== '0';
-    voice = new TrackVoice(track, () => (el ? el.currentTime : 0));
+    el.loop = true;
+    source = new TrackSource(track, () => (el ? el.currentTime : 0));
     await el.play();
     $('firsthint').hidden = true;
     say('Playing ' + label + ' with a mouth track (' + Math.round(track.data.length / 2 / track.fps) + ' s analysed)');
     return true;
-  } catch { return playUrl(url, label); }
+  } catch { return playLive(url, label); }
 }
-function playUrl(url, label) {
+function playLive(url, label) {
   ensureAudio(); stopSources();
   el = new Audio(url);
-  el.crossOrigin = 'anonymous';
-  el.loop = params.get('loop') !== '0';
+  el.loop = true;
   const src = audio.createMediaElementSource(el);
-  voice.connect(src);
+  live.connect(src);
   src.connect(audio.destination);
   return el.play().then(() => { say('Playing ' + label); return true; }, () => false);
 }
@@ -305,7 +348,7 @@ async function useMic() {
   try {
     ensureAudio(); stopSources();
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    voice.connect(audio.createMediaStreamSource(stream));
+    live.connect(audio.createMediaStreamSource(stream));
     $('firsthint').hidden = true;
     say('Listening to the microphone');
   } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
@@ -314,7 +357,7 @@ $('mic').addEventListener('click', () => useMic().catch(() => {}));
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
   if (!f) return;
-  playTrack(URL.createObjectURL(f), f.name, () => f.arrayBuffer()).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
+  playFile(f).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
 });
 
 // ---------------------------------------------------------------- menu and full screen
@@ -324,9 +367,7 @@ const menuOpen = () => !nav.classList.contains('hidden');
 function showMenu(on) { nav.classList.toggle('hidden', !on); if (on) $('play').focus(); }
 
 async function start() {
-  if (audioUrl) {
-    if (!(await playTrack(audioUrl, 'the audio'))) { say('The audio could not be played'); return; }
-  } else if (!stream && !el) {
+  if (!stream && !el) {
     try { await useMic(); } catch { return; }        // the status line says why
   } else if (el) {
     await el.play().catch(() => {});
@@ -340,7 +381,6 @@ $('fs').addEventListener('click', () => {
   document.documentElement.requestFullscreen().catch(() => {});
 });
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
-if (audioUrl && !screenMode) playTrack(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
 
 // ---------------------------------------------------------------- size and move
 const pointers = new Map();
@@ -410,25 +450,20 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- drawing
-function fit() {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-}
-let last = performance.now(), blinkAt = 2, blink = 0;
+let last = performance.now();
 const meterFill = document.querySelector('#meter i');
+const enabledPumpkins = () => settings.pumpkins.filter((p) => p.enabled);
 
 // The voice is measured and sent from a timer, not from the drawing loop: a browser stops the drawing loop in a
 // hidden tab, which would stop the other screens' mouths. A worker's timer is not slowed down in the background.
-let lastMouth = { open: 0, bright: 0.5, energy: 0 }, tickAt = performance.now();
+let lastMouths = [], tickAt = performance.now();
 function tick() {
-  if (screenMode || !voice) return;
+  if (screenMode || !source) return;
   const now = performance.now(), dt = Math.min(0.1, (now - tickAt) / 1000);
   tickAt = now;
-  voice.sens = settings.sens; voice.gate = settings.gate;
-  lastMouth = voice.update(dt);
+  lastMouths = mouths.update(source.frame(), dt, now / 1000, settings, enabledPumpkins());
   if (ready && screensN > 0 && now - lastSend >= 66) {
-    const v = packMouth(lastMouth);
+    const v = packMouth(lastMouths);
     if (changed(sentMouth, v)) { link.send({ action: 'm', v, n: ++seq }); sentMouth = v; lastSend = now; }
   }
 }
@@ -440,30 +475,21 @@ try {
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const t = now / 1000;
-  let m = { open: 0, bright: 0.5, energy: 0 };
+  let list, look, ms;
   if (screenMode) {                                   // follow what the main screen sent, smoothed between updates
     const k = Math.min(1, dt * 18);
-    for (const key of ['open', 'bright', 'energy']) shown[key] += (target[key] - shown[key]) * k;
-    m = shown;
-  } else if (voice) {
-    m = lastMouth;
-    meterFill.style.width = Math.round(Math.min(1, m.energy * 1.4) * 100) + '%';                                     // measured by the timer below, which keeps running in a hidden tab
+    shown = target.map((m, i) => {
+      const s = shown[i] || m;
+      return { open: s.open + (m.open - s.open) * k, bright: s.bright + (m.bright - s.bright) * k, energy: s.energy + (m.energy - s.energy) * k };
+    });
+    list = display && display.pumpkins; look = display; ms = shown;
+  } else {
+    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, dx: p.dx, dy: p.dy, scale: p.scale, color: p.color }));
+    look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;
+    meterFill.style.width = Math.round(Math.min(1, Math.max(0, ...ms.map((m) => m.energy)) * 1.4) * 100) + '%';
   }
-  if (t > blinkAt) { blink = 1; blinkAt = t + 2 + Math.random() * 4; }
-  blink = Math.max(0, blink - dt * 7);
-  const look = screenMode ? display : settings;
-  const faceObj = screenMode ? (display && display.face) : findFace(faces, settings.face).face;
-  if (faceObj) {
-    drawFace(fctx, faceObj, FACE_PX, { open: m.open, bright: m.bright, blink: blink > 0.5 ? 1 : blink * 2,
-      energy: m.energy, color: look.color, glow: look.glow, alpha: 1, time: t });
-  }
-  fit();
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (faceObj) {
-    const p = placement(canvas.width, canvas.height, look);
-    ctx.drawImage(face, p.left, p.top, p.s, p.s);
-  }
-requestAnimationFrame(frame);
+  if (list && list.length) stage.draw(list, ms, look, t, dt);
+  else { stage.fit(); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

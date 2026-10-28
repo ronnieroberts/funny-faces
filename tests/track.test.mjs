@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyze, parseTrack, trackAt, FPS } from '../src/track.js';
-import { TrackVoice } from '../src/voice.js';
+import { TrackSource, Mouths } from '../src/voice.js';
+import { DEFAULTS } from '../src/settings.js';
 
 const SR = 22050;
 function vowel(formants, f0, n) {
@@ -52,15 +53,15 @@ test('saved tracks are validated', async () => {
   assert.equal(parseTrack(null), null);
 });
 
-test('TrackVoice follows the clock and closes when the clock passes the end', async () => {
+test('a track source follows the clock and a mouth opens and closes with it', async () => {
   const t = await analyze({ mid: join([silence(0.3), seg(AA, 0.8)]), sampleRate: SR });
   let now = 0.8;
-  const v = new TrackVoice(t, () => now);
+  const src = new TrackSource(t, () => now), mouths = new Mouths();
   let m;
-  for (let i = 0; i < 10; i++) m = v.update(0.033);
-  assert.equal(m.shape, 'D');
-  assert.ok(m.open > 0.5);
+  for (let i = 0; i < 12; i++) m = mouths.update(src.frame(), 0.033, i * 0.033, DEFAULTS, [DEFAULTS.pumpkins[0]]);
+  assert.equal(m[0].shape, 'D');
+  assert.ok(m[0].open > 0.5);
   now = 50;
-  for (let i = 0; i < 20; i++) m = v.update(0.033);
-  assert.ok(m.open < 0.05);
+  for (let i = 0; i < 20; i++) m = mouths.update(src.frame(), 0.033, 1 + i * 0.033, DEFAULTS, [DEFAULTS.pumpkins[0]]);
+  assert.ok(m[0].open < 0.05);
 });

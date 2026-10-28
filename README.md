@@ -85,12 +85,26 @@ Inside a container every browser looks like it is on the network, so the contain
 `node scripts/build-standalone.mjs` writes `dist/standalone/index.html`, one file you can open in Chrome with no
 server (microphone only, no extra screens).
 
+## Pumpkins, voices and advanced settings
+
+- **Up to 8 pumpkins** at once (Pumpkins tab). Each has its own face, can be switched off, and can be nudged, resized and
+  given its own colour on the Layout tab.
+- **Who talks** (also on the Pumpkins tab):
+  - *All together, in sync*: every pumpkin moves with the sound.
+  - *Each pumpkin listens to its own voice range*: bass, baritone, tenor, alto, soprano, treble ("s" sounds) or the full
+    range, each with its own level. Good for songs with several voices.
+  - *Take turns*: one pumpkin speaks per phrase; the next phrase goes to the next pumpkin.
+  - *Random after each silence*: a random pumpkin starts after every silence, and the others may break in for a moment.
+- **Advanced** tab: input sensitivity (dB), output sensitivity (how wide the mouth opens), noise gate, snappiness (how
+  fast the mouth reacts and stops), voice focus (ignore drums and bass), mouth shapes (0 = plain open and close) and
+  resting brightness for pumpkins that are not talking. Use the Sound in bar on the Play tab to see what they hear.
+- A chosen audio file is analysed once in the browser and plays with its mouth track. A prepared song has no separate
+  voice ranges, so it plays all together (turns and random still work).
+
 ## Kiosk and Fire TV use
 
-Open `/?audio=<url>` (a file on the same server or a host that allows cross-origin reads). It starts playing at
-once when the browser allows it. If the browser blocks autoplay, press the one focused button (Enter on a remote,
-or a tap): it plays, goes full screen and hides everything but the face. Back, Escape or a tap brings the controls
-back. Other options: `face=<id>`, `color=<hex, no #>`, `loop=0` to play once. Not yet tested on a real Fire TV.
+For a screen that only shows the faces, open `/screen` on it and pair it with the code (see above). It goes full screen
+with one press of the remote's Select button or a tap. Not yet tested on a real Fire TV.
 
 ## How the screens work
 
@@ -105,12 +119,12 @@ itself, or (with `FACES_LAN_CONTROL=1`) the password. The server does not use th
 ## What it does today
 
 - Left-hand menu: Play, Faces, Layout, Look. Hide it (or go full screen) and only the face remains.
-- Draws the starter faces (taken from the Pumpkin Faces project) on a canvas, full screen.
+- Draws the starter faces on a canvas, full screen.
 - Add more faces by importing a face pack (one JSON file, see docs/FACEPACK.md). Packs are validated and kept in this browser; `?pack=<url>` loads one for a single visit.
 - Size and move the face: drag it, scroll or pinch to resize, or use the Layout sliders. With the menu hidden, remote arrows move it and Select switches the up and down arrows to resizing.
-- Mouth opens with the speech band (150 to 3500 Hz) of the chosen source, with an adaptive quiet cutoff.
+- Mouth opens with the speech band (150 to 3500 Hz) of the chosen source, with an adaptive quiet cutoff and nine mouth shapes.
 - Sources: microphone, or a local audio file.
-- Face, colour, glow and sensitivity are remembered in this browser.
+- Faces, colour, glow and the advanced settings are remembered in this browser.
 
 ## Extra face packs
 
@@ -120,7 +134,8 @@ by `node scripts/make-christmas-pack.mjs`, which is also a handy example for mak
 
 ## Known limits
 
-- One face at a time for now; no shared library.
+- No four-corner warp yet for lining a projector up with real pumpkins (planned).
+- Faces are flat shapes; a prepared song has no separate voice ranges.
 - Music mixed into the input moves the mouth too. Separating voices needs a model (next step).
 - Safari on iOS needs a tap before audio starts and cannot capture tab audio.
 

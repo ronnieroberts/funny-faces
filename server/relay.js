@@ -7,7 +7,7 @@
 import { randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';     // no 0/O, 1/I/L
-const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 60000, MAX_ATTEMPTS = 10, TRY_WINDOW = 600;
+const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 200000, MAX_ATTEMPTS = 10, TRY_WINDOW = 600;
 const ADMIN_ACTIONS = new Set(['pair', 'admin', 'state', 'm', 'end']);
 
 const normalize = (code) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -141,7 +141,7 @@ export class Relay {
 
   mouth(id, c, body) {
     const v = body.v;
-    if (c.role !== 'admin' || !c.session || !Array.isArray(v) || v.length !== 3 || !v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) return;
+    if (c.role !== 'admin' || !c.session || !Array.isArray(v) || !v.length || v.length % 3 || v.length > 24 || !v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) return;
     if (!this._screens(c.session).length) return this._send(c, { type: 'screens', n: 0 });
     this._fanOut(c.session, { type: 'm', v, ...seq(body) });
   }
