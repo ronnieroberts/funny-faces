@@ -34,12 +34,26 @@ const byte = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 /** One mouth per pumpkin, three bytes each. */
 export const packMouth = (list) => list.flatMap((m) => [byte(m.open), byte(m.bright), byte(m.energy)]);
 
-export function unpackMouth(v) {
-  if (!Array.isArray(v) || !v.length || v.length % 3 || v.length > 3 * MAX_PUMPKINS || !v.every((x) => Number.isInteger(x) && x >= 0 && x <= 255)) return null;
-  const out = [];
-  for (let i = 0; i < v.length; i += 3) out.push({ open: v[i] / 255, bright: v[i + 1] / 255, energy: v[i + 2] / 255 });
-  return out;
+/** The binary mouth message (see docs/PROTOCOL.md): 0x4D, a 16 bit sequence number, then the packed bytes. */
+export const MOUTH_TYPE = 0x4d;
+export function mouthFrame(n, packed) {
+  const f = new Uint8Array(3 + packed.length);
+  f[0] = MOUTH_TYPE; f[1] = (n >> 8) & 255; f[2] = n & 255; f.set(packed, 3);
+  return f;
 }
+
+/** A received binary message as {n, mouths}, or null when it is not a good mouth frame (1 to MAX_PUMPKINS pumpkins). */
+export function parseMouth(data) {
+  if (!(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data)) return null;
+  const b = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  if (b[0] !== MOUTH_TYPE || b.length < 6 || b.length > 3 + 3 * MAX_PUMPKINS || b.length % 3) return null;
+  const mouths = [];
+  for (let i = 3; i < b.length; i += 3) mouths.push({ open: b[i] / 255, bright: b[i + 1] / 255, energy: b[i + 2] / 255 });
+  return { n: (b[1] << 8) | b[2], mouths };
+}
+
+/** The 16 bit mouth sequence wraps: n is newer than last when it is 1 to 32767 steps ahead. last < 0 means nothing seen yet. */
+export const isNewer16 = (n, last) => last < 0 || (((n - last) & 0xffff) > 0 && ((n - last) & 0xffff) < 0x8000);
 
 /** Messages can arrive out of order; only accept a number higher than the last one used. */
 export const isNewer = (n, last) => !Number.isInteger(n) || n > last;

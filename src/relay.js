@@ -22,21 +22,24 @@ export class Link {
   stop() { this.stopped = true; clearInterval(this.pinger); clearTimeout(this.retry); if (this.ws) this.ws.close(); }
   get open() { return !!this.ws && this.ws.readyState === 1; }
 
-  send(obj) {
+  /** An object goes out as JSON text; bytes (a Uint8Array) go out as a binary message. */
+  send(msg) {
     if (!this.open) return false;
-    this.ws.send(JSON.stringify(obj));
+    this.ws.send(msg instanceof Uint8Array ? msg : JSON.stringify(msg));
     return true;
   }
 
   _connect() {
     const ws = new WebSocket(this.url);
     this.ws = ws;
+    ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
       this.delay = 1000;
       this.pinger = setInterval(() => this.send({ action: 'ping' }), PING_MS);
       if (this.on.open) this.on.open();
     };
     ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') { if (this.on.binary) this.on.binary(e.data); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
       if (msg && typeof msg === 'object' && this.on.message) this.on.message(msg);

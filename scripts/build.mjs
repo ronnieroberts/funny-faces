@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
-const order = ['response.js', 'visemes.js', 'fft.js', 'track.js', 'qr.js', 'facepack.js', 'layout.js', 'quad.js', 'settings.js', 'output.js', 'packs.js', 'conductor.js', 'voice.js', 'glstage.js', 'stage.js', 'editor.js', 'relay.js', 'share.js', 'tabaudio.js', 'app.js'];   // dependencies first
+const order = ['response.js', 'visemes.js', 'fft.js', 'track.js', 'qr.js', 'facepack.js', 'layout.js', 'quad.js', 'settings.js', 'output.js', 'packs.js', 'conductor.js', 'voice.js', 'glstage.js', 'stage.js', 'editor.js', 'relay.js', 'share.js', 'screenfollow.js', 'tabaudio.js', 'app.js'];   // dependencies first
 const names = {};
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist/assets', { recursive: true });

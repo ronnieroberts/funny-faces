@@ -11,6 +11,9 @@ export const mask = (op, payload, { fin = true, rsv = 0 } = {}) => {
   for (let i = 0; i < n; i++) out[i] = body[i] ^ key[i & 3];
   return Buffer.concat([head, key, out]);
 };
+export const binFrame = (bytes, opts) => mask(2, Buffer.from(bytes), opts);
+/** A mouth message: 0x4D, 16 bit sequence, then the bytes (3 per pumpkin). */
+export const mouthBytes = (n, values) => Buffer.from([0x4d, (n >> 8) & 255, n & 255, ...values]);
 export const textFrame = (obj) => mask(1, typeof obj === 'string' ? obj : JSON.stringify(obj));
 
 export const upgradeRequest = (port, path = '/ws', extra = '') =>
@@ -44,12 +47,14 @@ export function openWs(port, { path = '/ws', host } = {}) {
         else if (len === 127) { if (c.buf.length < 10) break; len = c.buf.readUInt32BE(6); at = 10; }
         if (c.buf.length < at + len) break;
         const op = c.buf[0] & 15, p = c.buf.subarray(at, at + len);
-        c.frames.push({ op, text: op === 1 ? p.toString() : '', code: op === 8 && len >= 2 ? p.readUInt16BE(0) : null });
+        c.frames.push({ op, text: op === 1 ? p.toString() : '', bin: op === 2 ? Buffer.from(p) : null, code: op === 8 && len >= 2 ? p.readUInt16BE(0) : null });
         c.buf = c.buf.subarray(at + len);
       }
       c.tick();
     });
     c.send = (obj) => sock.write(textFrame(obj));
+    c.sendBytes = (bytes) => sock.write(binFrame(bytes));
+    c.binary = () => c.frames.filter((f) => f.op === 2).map((f) => f.bin);
     c.json = () => c.frames.filter((f) => f.op === 1).map((f) => JSON.parse(f.text));
     c.until = (pred, ms = 3000) => new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('timed out waiting; got ' + JSON.stringify(c.frames.slice(-5)))), ms);
