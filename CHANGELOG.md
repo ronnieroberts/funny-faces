@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- First-run help for the unsigned downloads: `READ ME FIRST.txt` and the README now give clear steps for the Mac "Not Opened" (Gatekeeper) message (Open Anyway in System Settings, or `xattr -dr com.apple.quarantine`), Windows SmartScreen and Linux (`chmod +x`), and say plainly that the app is unsigned because it is a hobby project and runs only on the local network.
+
 ## 1.0.2
 
 1.0.1 was only the rename to Funny Faces; this is the first full release.

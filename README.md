@@ -11,14 +11,29 @@ You need a Windows or Mac computer, Chrome, and (for a TV) any TV or Fire TV on 
 **Easiest: the download with everything inside** (no installing anything)
 1. On the project's **Releases** page download the zip for your computer (`mac-arm64` for newer Macs, `mac-x64` for older
    Intel Macs, `win-x64` for Windows) and unzip it.
-2. Open the unzipped **Funny Faces** folder and double-click **Start Funny Faces**. The first time, Mac and Windows warn
-   about a download from an unknown developer; `READ ME FIRST.txt` in the folder shows how to continue past it.
+2. Open the unzipped **Funny Faces** folder and double-click **Start Funny Faces**. The first time, your computer will warn
+   about it; see **The first time you open it** below (`READ ME FIRST.txt` in the folder has the same steps).
 3. A window with two web addresses opens, and Chrome opens the control page. **Leave the window open**: closing it stops
    Funny Faces. If the computer asks to allow network access, choose **Allow**.
 4. In Chrome press **Use microphone**, say yes, and talk. The bar moves and the mouth should too.
 5. **To use a TV or projector too**, open the **Screens** tab: it shows an address and a QR code. Open the TV's web
    browser (on a Fire TV: Silk) and type that address. The TV shows a 6-character code.
 6. Type the code into the Screens tab and press **Add screen**. The face appears on the TV.
+
+### The first time you open it
+
+Funny Faces is a hobby project, so the app is not signed with a paid developer certificate. Mac and Windows therefore warn
+about it the first time. It is safe to continue: Funny Faces runs only on your local network and sends nothing to the internet.
+
+**Mac** ("Start Funny Faces.command" was Not Opened):
+- Option A: double-click it and dismiss the dialog. Open **System Settings > Privacy & Security**, scroll down to the
+  message about "Start Funny Faces.command", click **Open Anyway**, and confirm.
+- Option B: in Terminal run `xattr -dr com.apple.quarantine "<the unzipped Funny Faces folder>"` (type the command, drag the
+  folder onto the Terminal window to fill in its path, press Return), then double-click as usual.
+
+**Windows:** if you see "Windows protected your PC", click **More info**, then **Run anyway**.
+
+**Linux:** make the launcher runnable once with `chmod +x start-funny-faces.sh`, then run it.
 
 **If you only have the source code** (a ZIP of this project, or a clone): install Node.js 22 or newer from
 https://nodejs.org (the **LTS** download), open a command window in the folder (Mac: Terminal, type `cd ` and drag the
@@ -85,19 +100,19 @@ Inside a container every browser looks like it is on the network, so the contain
 `node scripts/build-standalone.mjs` writes `dist/standalone/index.html`, one file you can open in Chrome with no
 server (microphone only, no extra screens).
 
-## Pumpkins, voices and advanced settings
+## Faces, voices and advanced settings
 
-- **Up to 8 pumpkins** at once (Pumpkins tab). Each has its own face, can be switched off, and can be nudged, resized and
-  given its own colour on the Layout tab.
-- **Who talks** (also on the Pumpkins tab):
-  - *All together, in sync*: every pumpkin moves with the sound.
-  - *Each pumpkin listens to its own voice range*: bass, baritone, tenor, alto, soprano, treble ("s" sounds) or the full
+- **Up to 8 faces** at once (Faces tab). Each has its own face, can be switched off, and can be nudged, resized and
+  given its own colour (sections *Look of this face* and *Position and size*).
+- **Who talks** (also on the Faces tab):
+  - *All together, in sync*: every face moves with the sound.
+  - *Each face listens to its own voice range*: bass, baritone, tenor, alto, soprano, treble ("s" sounds) or the full
     range, each with its own level. Good for songs with several voices.
-  - *Take turns*: one pumpkin speaks per phrase; the next phrase goes to the next pumpkin.
-  - *Random after each silence*: a random pumpkin starts after every silence, and the others may break in for a moment.
+  - *Take turns*: one face speaks per phrase; the next phrase goes to the next face.
+  - *Random after each silence*: a random face starts after every silence, and the others may break in for a moment.
 - **Advanced** tab: input sensitivity (dB), output sensitivity (how wide the mouth opens), noise gate, snappiness (how
   fast the mouth reacts and stops), voice focus (ignore drums and bass), mouth shapes (0 = plain open and close) and
-  resting brightness for pumpkins that are not talking. Use the Sound in bar on the Play tab to see what they hear.
+  resting brightness for faces that are not talking. Use the Sound in bar on the Play tab to see what they hear.
 - A chosen audio file is analysed once in the browser and plays with its mouth track. A prepared song has no separate
   voice ranges, so it plays all together (turns and random still work).
 
@@ -107,8 +122,8 @@ To make the faces talk along with Apple Music, YouTube or any other web page, pr
 Play tab, choose **Chrome Tab**, pick the tab and tick **Share tab audio**. The tab keeps playing out loud; press
 Stop sharing in the browser to end it. This works in Chrome or Edge on a computer (on a Mac only Chrome tabs can share
 sound; on Windows a whole screen can too). TV browsers cannot do it: capture on the computer and let the TV screen
-follow. Tip: play the music in a Chrome tab and use Voice focus / Voice bands on the Advanced and Pumpkins tabs so
-each pumpkin follows its own part.
+follow. Tip: play the music in a Chrome tab and use Voice focus / Voice bands on the Advanced and Faces tabs so
+each face follows its own part.
 
 ## Projectors: mirror, flip and keep-awake
 
@@ -127,14 +142,14 @@ These options belong to each device, so the projector's own page can have them w
 
 ## Lining up with real pumpkins
 
-Each pumpkin sits on its own four-corner shape, so you can fit a projected face onto a real pumpkin.
+Each face sits on its own four-corner shape, so you can fit a projected face onto a real pumpkin.
 
-1. Project full screen, then press **E** (or **Edit pumpkins** on the Layout tab). The menu hides and handles appear on the picked pumpkin.
-2. Drag a pumpkin to move it. Drag a corner to skew it (the face tilts in perspective). Drag a side dot to stretch it that way. The top dot rotates, the bottom ring zooms. The mouse wheel zooms the pumpkin under the pointer. Two fingers pinch it on a touch screen.
-3. Tab picks the next pumpkin, the arrow keys nudge (Shift for bigger steps), + and - zoom, R resets the skew.
+1. Project full screen, then press **E** (or **Edit on the stage** on the Faces tab). The menu hides and handles appear on the picked face.
+2. Drag a face to move it. Drag a corner to skew it (the face tilts in perspective). Drag a side dot to stretch it that way. The top dot rotates, the bottom ring zooms. The mouse wheel zooms the face under the pointer. Two fingers pinch it on a touch screen.
+3. Tab picks the next face, the arrow keys nudge (Shift for bigger steps), + and - zoom, R resets the skew.
 4. Press **E** or **Esc** to finish. M brings the menu back.
 
-Layout tab: **Reset skew** squares up the picked pumpkin, **Re-arrange all pumpkins** puts them back in a row, and the Size, Left / right and Up / down sliders move and resize all of them together. Screens added from the Screens tab draw the same shapes. A browser without WebGL2 draws faces flat: they still move, zoom and rotate, but skew has no perspective.
+Faces tab: **Straighten this face** squares up the picked face, **Line all faces up in a row** puts them back in a row, and the Size, Left / right and Up / down sliders under *Whole stage* move and resize all of them together. Screens added from the Screens tab draw the same shapes. A browser without WebGL2 draws faces flat: they still move, zoom and rotate, but skew has no perspective.
 
 ## Kiosk and Fire TV use
 
