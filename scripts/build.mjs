@@ -20,11 +20,6 @@ for (const f of order) {
 }
 
 let html = readFileSync('index.html', 'utf8');
-// The relay address (from the untracked config.json) is baked into the page, so the page needs no second request.
-if (existsSync('config.json')) {
-  const relay = JSON.parse(readFileSync('config.json', 'utf8')).relay;
-  if (/^wss:\/\/[\w.\-\/]+$/.test(relay || '')) html = html.replace('<meta name="relay" content="">', `<meta name="relay" content="${relay}">`);
-}
 html = html.replace('src/app.js', `assets/${names['app.js']}`);
 writeFileSync('dist/index.html', html);
 console.log(JSON.stringify(names, null, 2));

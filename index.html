@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="relay" content="">
 <title>Funny Faces</title>
 <style>
   :root { --bg:#000; --fg:#eee; --muted:#9a9a9a; --panel:#111; --line:#2a2a2a; --accent:#ff8a1f; }
@@ -85,14 +84,15 @@
 
   <section class="pane" data-pane="screens">
     <div id="screenpane">
-      <p>Show this face on another screen, such as a TV. Open <b>this page with <code>?screen</code> added</b> on the other screen. It shows a code. Type the code here.</p>
+      <p>Show this face on another screen, such as a TV on the same Wi-Fi or network.</p>
+      <p id="tvurlrow" hidden>On the TV's browser, open <b id="tvurl"></b>. It shows a code. Type the code below.</p>
       <label>Code <input id="pairinput" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
       <button id="pairbtn" type="button" class="primary">Add screen</button>
       <button id="endshare" type="button" class="danger">Stop sharing</button>
       <div id="screenstatus" role="status"></div>
       <small>The other screen shows what you set up here and moves its mouth as you speak into this device's microphone.</small>
     </div>
-    <p id="noscreens" hidden>Screens need the hosted version of this page.</p>
+    <p id="noscreens" hidden>Extra screens need Funny Faces running on a computer (run it, then open the page it prints). This page was opened on its own.</p>
   </section>
 
   <div class="foot">
