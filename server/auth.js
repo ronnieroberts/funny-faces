@@ -25,14 +25,24 @@ export function sameOrigin(req) {
 
 export class Auth {
   constructor(dir, { lanControl = false } = {}) {
-    this.lanControl = lanControl; this.file = join(dir, 'auth.json'); this.fails = new Map();
+    this.lanControl = lanControl; this.setupCode = ''; this.file = join(dir, 'auth.json'); this.fails = new Map();
     mkdirSync(dir, { recursive: true });
     this.data = existsSync(this.file) ? JSON.parse(readFileSync(this.file, 'utf8')) : {};
     if (!this.data.secret) { this.data.secret = randomBytes(32).toString('hex'); this._save(); }
   }
 
+  /** Shown only in the terminal, so the first person to set the LAN password has to be someone who can see it. */
+  needSetupCode() {
+    if (this.lanControl && !this.hasPassword && !this.setupCode) this.setupCode = randomBytes(4).toString('hex').toUpperCase();
+    return this.setupCode;
+  }
+
   _save() { writeFileSync(this.file, JSON.stringify(this.data)); try { chmodSync(this.file, 0o600); } catch { /* not supported */ } }
   get hasPassword() { return !!this.data.hash; }
+  checkSetupCode(code) {
+    const a = Buffer.from(String(code || '').trim().toUpperCase()), b = Buffer.from(this.setupCode);
+    return b.length > 0 && a.length === b.length && timingSafeEqual(a, b);
+  }
 
   setPassword(pw) {
     if (typeof pw !== 'string' || pw.length < MIN_PASSWORD) throw new Error(`Use at least ${MIN_PASSWORD} characters`);

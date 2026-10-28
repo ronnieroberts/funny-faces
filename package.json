@@ -7,7 +7,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "start": "node scripts/build.mjs > /dev/null && node server/main.js",
+    "start": "node server/main.js",
     "test": "node --test tests"
   }
 }

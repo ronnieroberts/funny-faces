@@ -7,9 +7,10 @@
 import { randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';     // no 0/O, 1/I/L
-const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 60000, MAX_ATTEMPTS = 10;
+const CODE_LEN = 6, CODE_TTL = 600, SESSION_TTL = 30 * 86400, MAX_STATE = 60000, MAX_ATTEMPTS = 10, TRY_WINDOW = 600;
 const ADMIN_ACTIONS = new Set(['pair', 'admin', 'state', 'm', 'end']);
 
+const normalize = (code) => String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const same = (a, b) => {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && timingSafeEqual(x, y);
@@ -20,10 +21,17 @@ export class Relay {
   /** sessions: optional saved {id: {key, state, ttl}} so screens survive a restart. onSessions(obj) is called on change. */
   constructor({ now = () => Math.floor(Date.now() / 1000), sessions = {}, onSessions = () => {} } = {}) {
     this.now = now; this.onSessions = onSessions;
-    this.conns = new Map(); this.codes = new Map(); this.sessions = new Map(Object.entries(sessions));
+    this.tries = new Map(); this.conns = new Map(); this.codes = new Map(); this.sessions = new Map(Object.entries(sessions));
   }
 
-  connect(id, send, adminOk) { this.conns.set(id, { send, adminOk: !!adminOk, role: null, session: null, attempts: 0 }); }
+  /** ip is who is connecting: wrong codes are counted per address, so reconnecting does not reset the count. */
+  connect(id, send, adminOk, ip = '') { this.conns.set(id, { send, adminOk: !!adminOk, role: null, session: null, ip }); }
+
+  _tries(c) {
+    const t = this.now(), e = this.tries.get(c.ip);
+    if (!e || t - e.at > TRY_WINDOW) { const fresh = { n: 0, at: t }; this.tries.set(c.ip, fresh); return fresh; }
+    return e;
+  }
 
   disconnect(id) {
     const c = this.conns.get(id);
@@ -57,6 +65,7 @@ export class Relay {
   sweep() {
     const t = this.now();
     for (const [code, e] of this.codes) if (e.ttl < t) this.codes.delete(code);
+    for (const [ip, e] of this.tries) if (t - e.at > TRY_WINDOW) this.tries.delete(ip);
     let changed = false;
     for (const [id, s] of this.sessions) if (s.ttl < t) { this.sessions.delete(id); changed = true; }
     if (changed) this._save();
@@ -76,12 +85,13 @@ export class Relay {
   }
 
   pair(id, c, body) {
-    if (c.attempts >= MAX_ATTEMPTS) return this._error(c, 'too_many_attempts');
-    const code = String(body.code || '').trim().toUpperCase();
+    const tries = this._tries(c);
+    if (tries.n >= MAX_ATTEMPTS) return this._error(c, 'too_many_attempts');
+    const code = normalize(body.code);
     const entry = code.length === CODE_LEN ? this.codes.get(code) : null;
     if (entry) this.codes.delete(code);
     const screen = entry && entry.ttl >= this.now() ? this.conns.get(entry.conn) : null;
-    if (!screen) { c.attempts++; return this._error(c, 'bad_code'); }
+    if (!screen) { tries.n++; return this._error(c, 'bad_code'); }
     let session = body.session, sess = this._checkSession(session, body.key);
     if (!sess) {
       session = randomBytes(12).toString('base64url');
@@ -90,7 +100,7 @@ export class Relay {
     sess.ttl = this.now() + SESSION_TTL;
     this.sessions.set(session, sess);
     this._save();
-    c.role = 'admin'; c.session = session; c.attempts = 0; sess.admin = id;
+    c.role = 'admin'; c.session = session; this.tries.delete(c.ip); sess.admin = id;
     screen.role = 'screen'; screen.session = session; screen.code = null;
     this._send(screen, { type: 'paired', session });
     if (sess.state) this._send(screen, { type: 'state', state: JSON.parse(sess.state) });
@@ -100,7 +110,7 @@ export class Relay {
   admin(id, c, body) {
     const sess = this._checkSession(body.session, body.key);
     if (!sess) return this._error(c, 'unknown_session');
-    c.role = 'admin'; c.session = body.session; c.attempts = 0; sess.admin = id;
+    c.role = 'admin'; c.session = body.session; sess.admin = id;
     sess.ttl = this.now() + SESSION_TTL;
     this._send(c, { type: 'ready', screens: this._screens(body.session).length });
   }

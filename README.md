@@ -1,8 +1,35 @@
 # Funny Faces
 
-A single static web page that gives a talking face to any audio. Open it, pick a face, point it at a
-microphone or an audio file, and the mouth follows the voice. There is no server and no account.
-Settings are stored in this browser only (localStorage).
+Funny Faces gives a talking face to any sound. Pick a character (jack-o'-lantern, snowman, elf and more), point it
+at a microphone or a song, and its mouth moves with the voice. Show it full screen on a TV or projector, or on
+several screens at once. Everything runs on your own computer and home network; nothing goes to the internet.
+
+## Quick start for families
+
+You need a Windows or Mac computer, Chrome, and (for a TV) any TV or Fire TV on the same Wi-Fi. About 10 minutes.
+
+1. **Get the files.** On the project page click the green **Code** button, then **Download ZIP**, and unzip it
+   (double-click the ZIP). A ready-made app that skips steps 2 to 4 is planned.
+2. **Install Node.js** (the small helper program that runs Funny Faces). Go to https://nodejs.org, click the big
+   **LTS** download, open it and click Next through the installer.
+3. **Open a command window in the unzipped folder.**
+   - Mac: open **Terminal** (press Command+Space, type Terminal), type `cd ` (with a space), drag the unzipped
+     folder into the window, press Return.
+   - Windows: open the unzipped folder, click the address bar at the top, type `cmd` and press Enter.
+4. **Type `npm start` and press Enter.** After a few seconds it prints two web addresses. **Leave this window
+   open**: closing it stops Funny Faces. If the computer asks to allow network access, choose **Allow**.
+5. **On this computer**, open Chrome and go to the first address (`http://localhost:8765/`). Press **Use
+   microphone**, say yes when Chrome asks, and speak. The mouth should move.
+6. **To use a TV or projector too**, open the TV's web browser (on a Fire TV: Silk) and type the second
+   address, like `http://192.168.1.23:8765/screen`. The TV shows a 6-character code.
+7. On the computer, open the **Screens** tab, type the code, and press **Add screen**. The face appears on the TV.
+
+If something goes wrong: the TV page says it cannot connect (allow Funny Faces or "node" in the computer's
+firewall, and make sure the computer is awake and on the same Wi-Fi as the TV); the window says Funny Faces is
+already running (it is: use the first address); the code is not accepted (it lasts 10 minutes, so reload the TV
+page for a new one).
+
+## Notes for tinkerers
 
 ## Mouth shapes
 
@@ -13,9 +40,9 @@ per 40 ms) that plays in sync with the sound. The "Singer focus" box favors the 
 the singer usually is. Shape logic is in `src/visemes.js`, tracks in `src/track.js`. The G and H shapes appear
 only in tracks that carry them; the live classifier uses the other seven.
 
-## Quick start
+## Run it from the command line
 
-You need [Node.js](https://nodejs.org) 22 or newer (the "LTS" download). Then, in this folder:
+You need [Node.js](https://nodejs.org) 22 or newer. In this folder:
 
 ```bash
 npm start
@@ -39,7 +66,7 @@ cannot reach it.
 ### Controlling from a phone or another computer
 
 By default only the computer running Funny Faces can open the control page. To open it to your network, start with
-`FACES_LAN_CONTROL=1 npm start`. The first person to visit sets a password; everyone after that logs in. The
+`FACES_LAN_CONTROL=1 npm start`. The first person to visit sets a password (using a one-time setup code printed in the terminal, so a neighbour on the Wi-Fi cannot claim it); everyone after that logs in. The
 microphone does not work from another device over plain `http`, so use this for sliders and face choice, and keep
 the microphone on the computer.
 
@@ -51,7 +78,7 @@ docker run -d -p 8765:8765 -v funny-faces-data:/data funny-faces
 ```
 
 Inside a container every browser looks like it is on the network, so the container always asks for a password
-(first visit sets it). Open `http://localhost:8765/` on the host computer so the microphone works.
+(first visit sets it, with the setup code in the container logs). Open `http://localhost:8765/` on the host computer so the microphone works.
 
 ### Just one screen, nothing to install
 

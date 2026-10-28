@@ -18,9 +18,9 @@ main{max-width:26rem;padding:2rem}input,button{font:inherit;padding:.6rem;margin
 button{background:#e8741a;border:0;color:#111;font-weight:600}small{color:#aaa}</style><main>${body}</main>`;
 
 const form = (title, intro, extra) => page(title, `<h1>${title}</h1><p>${intro}</p>
-<form id="f"><input id="pw" type="password" autocomplete="${extra.auto}" placeholder="Password" minlength="8" required autofocus>
+<form id="f">${extra.code ? '<input id="code" placeholder="Setup code from the terminal window" autocomplete="off" required>' : ''}<input id="pw" type="password" autocomplete="${extra.auto}" placeholder="Password" minlength="8" required autofocus>
 <button>${extra.button}</button><small id="m"></small></form>
-<script>f.onsubmit=async e=>{e.preventDefault();const r=await fetch('${extra.api}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value})});
+<script>f.onsubmit=async e=>{e.preventDefault();const r=await fetch('${extra.api}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value,code:window.code?code.value:''})});
 if(r.ok)location.href='/';else m.textContent=(await r.json().catch(()=>({}))).error||'Try again'}</script>`);
 
 /** LAN addresses a TV can use to reach this computer, nicest first. */
@@ -35,6 +35,7 @@ export function lanUrls(port) {
 
 export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', distDir = './dist', lanControl = false } = {}) {
   const auth = new Auth(dataDir, { lanControl });
+  auth.needSetupCode();
   const sessFile = join(dataDir, 'sessions.json');
   let saved = {};
   try { saved = JSON.parse(readFileSync(sessFile, 'utf8')); } catch { /* first run */ }
@@ -67,10 +68,11 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
     }
     if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Not allowed' });
-      const { password } = await readBody(req);
+      const { password, code } = await readBody(req);
       if (!lanControl) return json(res, 403, { error: 'Control from other devices is turned off' });
       if (path === '/api/setup') {
         if (auth.hasPassword) return json(res, 409, { error: 'A password is already set' });
+        if (!auth.checkSetupCode(code)) return json(res, 403, { error: 'Wrong setup code. It is shown in the window where Funny Faces is running.' });
         try { auth.setPassword(password); } catch (e) { return json(res, 400, { error: e.message }); }
         return json(res, 200, { ok: true }, { 'set-cookie': auth.cookie(auth.token()) });
       }
@@ -85,7 +87,7 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
       if (!lanControl) return res.end(page('Funny Faces', '<h1>Funny Faces</h1><p>Controls are only available on the computer that runs Funny Faces.</p><p>On a TV or another screen, open <b>/screen</b> instead and type the code it shows into the control page.</p>'));
       return res.end(auth.hasPassword
         ? form('Log in', 'Enter the Funny Faces password.', { api: '/api/login', button: 'Log in', auto: 'current-password' })
-        : form('Set a password', 'First time here. Choose a password for controlling Funny Faces from other devices (8 or more characters).', { api: '/api/setup', button: 'Save password', auto: 'new-password' }));
+        : form('Set a password', 'First time here. Choose a password for controlling Funny Faces from other devices (8 or more characters).', { api: '/api/setup', button: 'Save password', auto: 'new-password', code: true }));
     }
 
     // static files
@@ -107,7 +109,7 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
     const ws = upgrade(req, socket);
     if (!ws) return;
     const id = randomBytes(8).toString('hex');
-    relay.connect(id, (obj) => ws.send(JSON.stringify(obj)), adminOk);
+    relay.connect(id, (obj) => ws.send(JSON.stringify(obj)), adminOk, req.socket.remoteAddress);
     ws.on('message', (text) => { try { relay.handle(id, JSON.parse(text)); } catch { /* not JSON */ } });
     ws.on('close', () => relay.disconnect(id));
   });
@@ -115,7 +117,7 @@ export function createApp({ port = 8765, host = '0.0.0.0', dataDir = './data', d
 
   return {
     server, relay, auth,
-    listen: () => new Promise((ok) => server.listen(port, host, () => ok(server.address().port))),
+    listen: () => new Promise((ok, fail) => { server.once('error', fail); server.listen(port, host, () => ok(server.address().port)); }),
     close: () => new Promise((ok) => { server.closeAllConnections(); server.close(ok); }),
   };
 }
