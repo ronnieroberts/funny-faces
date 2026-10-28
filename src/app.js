@@ -2,23 +2,29 @@ import { drawFace } from './facepack.js';
 import { LiveSource, TrackSource, Mouths } from './voice.js';
 import { analyze } from './track.js';
 import { qrSvg } from './qr.js';
-import { load, save, resize, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
+import { load, save, resize, arrange, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
 import { Stage } from './stage.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
 import { drag, scale, nudge } from './layout.js';
+import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
+import { createEditor } from './editor.js';
 import { Link, loadConfig } from './relay.js';
 import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
 import { captureTabAudio, tabAudioSupported, TAB_AUDIO_MESSAGES } from './tabaudio.js';
 import { applyOutput, loadScreenOutput, saveScreenOutput, screenAddress, createWakeLock, awakeMessage } from './output.js';
 
 const $ = (id) => document.getElementById(id);
-const canvas = $('stage'), ctx = canvas.getContext('2d');
-const stage = new Stage(canvas);
+const canvas = $('stage');
+const stage = new Stage(canvas);                       // takes the canvas's context: WebGL2, or 2D when that is missing
+const aspect = () => (canvas.width && canvas.height ? canvas.width / canvas.height : innerWidth / innerHeight);
 
-const settings = load();
+const settings = load(undefined, innerWidth / innerHeight);
+$('renderinfo').textContent = stage.mode === 'webgl2' ? 'Drawing with WebGL2: pumpkins can be skewed in perspective.'
+  : 'This browser has no WebGL2. Faces are drawn flat: they move, zoom and rotate, but skew has no perspective.';
 let packs = loadPacks();
 const params = new URLSearchParams(location.search);
 const say = (m) => { $('status').textContent = m; };
+if (stage.mode !== 'webgl2') say('No WebGL2 in this browser: faces are drawn flat, without perspective warp.');
 let toastTimer = 0;
 function toast(m) {
   $('toast').textContent = m; $('toast').classList.add('on');
@@ -38,6 +44,7 @@ function syncControls() {
     if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
   }
   for (const o of document.querySelectorAll('output[data-for]')) o.textContent = fmt(getPath(pathOf({ dataset: { path: o.dataset.for } })));
+  for (const k of ['size', 'x', 'y']) $(k).value = settings[k];
   document.body.dataset.mode = settings.mode;
 }
 for (const el of document.querySelectorAll('[data-path]')) {
@@ -138,14 +145,19 @@ function renderPumpkins() {
   });
 }
 $('count').addEventListener('change', () => {
-  settings.pumpkins = resize(settings.pumpkins, +$('count').value);
+  settings.pumpkins = resize(settings.pumpkins, +$('count').value, aspect(), settings);
   renderPumpkins(); renderFaces(); persist();
 });
 for (let n = 1; n <= MAX_PUMPKINS; n++) $('count').append(Object.assign(document.createElement('option'), { value: n, textContent: n === 1 ? '1 pumpkin' : `${n} pumpkins` }));
 renderPumpkins();
 $('arrange').addEventListener('click', () => {
-  for (const p of settings.pumpkins) Object.assign(p, { dx: 0, dy: 0, scale: 1 });
+  settings.pumpkins = arrange(settings.pumpkins, aspect(), settings);
   syncControls(); persist(); toast('Pumpkins re-arranged');
+});
+$('resetskew').addEventListener('click', () => {
+  const p = settings.pumpkins[sel];
+  p.quad = resetSkew(p.quad, aspect());
+  persist(); toast('Skew reset');
 });
 
 // ---------------------------------------------------------------- screens: show the face on other displays
@@ -197,7 +209,7 @@ function pushState() {
   if (!ready || screenMode) return;
   link.send({ action: 'state', state: buildState(settings, (key) => findFace(faces, key).face, epoch), n: ++seq });
 }
-function scheduleShare() { clearTimeout(shareTimer); shareTimer = setTimeout(pushState, 150); }
+function scheduleShare() { if (!shareTimer) shareTimer = setTimeout(() => { shareTimer = 0; pushState(); }, 150); }   // at most every 150 ms, so a drag shows live on the other screens
 
 function startAdminLink() {
   if (!relayUrl || link) return;
@@ -438,11 +450,43 @@ $('fs').addEventListener('click', () => {
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
 
 // ---------------------------------------------------------------- size and move
+// With edit mode off, drag, pinch, wheel and arrows move and resize the whole group (every pumpkin's quad together).
+// With edit mode on, editor.js moves, warps and zooms one pumpkin.
+const groupQuads = () => settings.pumpkins.map((p) => p.quad);
+/** Place the whole group: x and y as before (-1 to 1 across the stage), size as a multiple of the default. */
+function setGroup({ x, y, size }) {
+  const A = aspect(), c = [0.5 + settings.x / 2, 0.5 + settings.y / 2];
+  let quads = groupQuads();
+  if (size !== settings.size) {
+    const scaled = scaleAll(quads, size / settings.size, c, A);
+    if (scaled === quads) size = settings.size;                  // it would not fit: stay as we were
+    quads = scaled;
+  }
+  const moved = moveAll(quads, (x - settings.x) / 2, (y - settings.y) / 2);
+  settings.pumpkins.forEach((p, i) => { p.quad = moved[i]; });
+  Object.assign(settings, { size, x: settings.x + (moved[0][0][0] - quads[0][0][0]) * 2, y: settings.y + (moved[0][0][1] - quads[0][0][1]) * 2 });
+}
+const groupBy = (f) => { setGroup({ x: settings.x, y: settings.y, size: settings.size, ...f(settings) }); syncControls(); persist(); };
+for (const k of ['size', 'x', 'y']) $(k).addEventListener('input', () => groupBy(() => ({ [k]: +$(k).value })));
+
+const editor = createEditor({
+  canvas, overlay: $('overlay'), pumpkins: () => settings.pumpkins,
+  sel: () => sel, changed: () => persist(),
+  select(i) { sel = i; syncControls(); renderFaces(); renderPumpkins(); },
+  onMode(on) {
+    $('overlay').hidden = !on; $('edithint').hidden = !on; $('editbtn').textContent = on ? 'Finish editing' : 'Edit pumpkins';
+    canvas.classList.toggle('editing', on);
+    if (on) { showMenu(false); toast('Editing: Esc or E to finish'); }
+  },
+});
+$('editbtn').addEventListener('click', () => { if (!screenMode) editor.toggle(); });
+
 const pointers = new Map();
 let moved = 0, pinch = 0;
 const goFull = () => document.documentElement.requestFullscreen().catch(() => {});
 canvas.addEventListener('pointerdown', (e) => {
   if (screenMode) { goFull(); return; }              // a display only needs a tap to go full screen
+  if (editor.on) return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   moved = 0; pinch = 0;
@@ -450,39 +494,44 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
-  if (!p) return;
+  if (!p || editor.on) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
   moved += Math.abs(dx) + Math.abs(dy);
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinch) Object.assign(settings, scale(settings, d / pinch));
+    if (pinch) groupBy((l) => scale(l, d / pinch));
     pinch = d;
   } else if (pointers.size === 1) {
-    Object.assign(settings, drag(settings, dx, dy, innerWidth, innerHeight));
+    const [sx, sy] = viewDelta(dx, dy, editor.flags());          // a mirrored or flipped page drags the way you see it
+    groupBy((l) => drag(l, sx, sy, innerWidth, innerHeight));
   }
-  syncControls(); persist();
 });
 function endPointer(e) {
   pointers.delete(e.pointerId); pinch = 0;
   if (!pointers.size) {
     canvas.classList.remove('dragging');
-    if (moved < 6 && e.type === 'pointerup') showMenu(!menuOpen());   // a tap shows or hides the menu
+    if (!editor.on && moved < 6 && e.type === 'pointerup') showMenu(!menuOpen());   // a tap shows or hides the menu
   }
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
-  if (screenMode) return;
+  if (screenMode || editor.on) return;
   e.preventDefault();
-  Object.assign(settings, scale(settings, Math.exp(-e.deltaY * 0.0015)));
-  syncControls(); persist();
+  groupBy((l) => scale(l, Math.exp(-e.deltaY * 0.0015)));
 }, { passive: false });
-$('reset').addEventListener('click', () => { Object.assign(settings, { x: 0, y: 0, size: 0.8 }); syncControls(); persist(); });
+$('reset').addEventListener('click', () => groupBy(() => ({ x: 0, y: 0, size: 0.8 })));
 
 addEventListener('keydown', (e) => {
   if (screenMode) { if (screenKey(e)) return; if (e.key === 'Enter') goFull(); return; }
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox';
+  if (editor.on) {
+    if (e.key === 'Escape' || ((e.key === 'e' || e.key === 'E') && !typing && !e.metaKey && !e.ctrlKey)) { editor.setOn(false); e.preventDefault(); return; }
+    if (typing || menuOpen() && e.target !== document.body) return;
+    if (editor.key(e)) return;
+  } else if ((e.key === 'e' || e.key === 'E') && !typing && !e.metaKey && !e.ctrlKey) { editor.setOn(true); return; }
   if (menuOpen()) {
     if (e.key === 'Escape') showMenu(false);
     return;                                           // let the menu use its own keys
@@ -491,16 +540,15 @@ addEventListener('keydown', (e) => {
   const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
   if (arrows[e.key]) {
     e.preventDefault();
-    const [dx, dy] = arrows[e.key];
-    if (mode === 'move') Object.assign(settings, nudge(settings, dx, dy));
-    else if (dy) Object.assign(settings, scale(settings, dy < 0 ? 1.05 : 1 / 1.05));
-    syncControls(); persist();
+    const [dx, dy] = viewDelta(...arrows[e.key], editor.flags());
+    if (mode === 'move') groupBy((l) => nudge(l, dx, dy));
+    else if (dy) groupBy((l) => scale(l, dy < 0 ? 1.05 : 1 / 1.05));
   } else if (e.key === 'Enter') {
     e.preventDefault();
     mode = mode === 'move' ? 'size' : 'move';
     toast(mode === 'move' ? 'Arrows move the face' : 'Up and down resize the face');
-  } else if (e.key === '+' || e.key === '=') { Object.assign(settings, scale(settings, 1.05)); syncControls(); persist(); }
-  else if (e.key === '-') { Object.assign(settings, scale(settings, 1 / 1.05)); syncControls(); persist(); }
+  } else if (e.key === '+' || e.key === '=') groupBy((l) => scale(l, 1.05));
+  else if (e.key === '-') groupBy((l) => scale(l, 1 / 1.05));
   else if (e.key === 'Escape' || e.key === 'ContextMenu' || e.key === 'Backspace' || e.key === 'm') showMenu(true);
 });
 
@@ -539,12 +587,13 @@ function frame(now) {
     });
     list = display && display.pumpkins; look = display; ms = shown;
   } else {
-    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, dx: p.dx, dy: p.dy, scale: p.scale, color: p.color }));
+    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
     look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;
     meterFill.style.width = Math.round(Math.min(1, Math.max(0, ...ms.map((m) => m.energy)) * 1.4) * 100) + '%';
   }
   if (list && list.length) stage.draw(list, ms, look, t, dt);
-  else { stage.fit(); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  else stage.clear();
+  editor.draw();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

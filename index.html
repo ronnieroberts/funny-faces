@@ -10,6 +10,15 @@
   html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:15px system-ui,sans-serif; overflow:hidden; }
   #stage { position:fixed; inset:0; width:100vw; height:100vh; background:#000; touch-action:none; cursor:grab; }
   #stage.dragging { cursor:grabbing; }
+  #stage.editing { cursor:default; }
+  #overlay { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; }
+  #overlay[hidden] { display:none; }
+  /* the handles are flipped the same way as the stage, so they stay on the faces */
+  body[data-mirror="1"] #overlay { transform:scaleX(-1); }
+  body[data-flip="1"] #overlay { transform:rotate(180deg); }
+  body[data-mirror="1"][data-flip="1"] #overlay { transform:scaleY(-1); }
+  #edithint { position:fixed; top:0; left:50%; transform:translateX(-50%); padding:6px 14px; border-radius:0 0 12px 12px; background:#000c; color:#fff; font-size:.85em; pointer-events:none; white-space:nowrap; }
+  #edithint[hidden] { display:none; }
   #nav { position:fixed; top:0; left:0; bottom:0; width:340px; max-width:90vw; background:var(--panel); border-right:1px solid var(--line);
     display:flex; flex-direction:column; }
   #nav.hidden { display:none; }
@@ -71,6 +80,8 @@
 </head>
 <body>
 <canvas id="stage"></canvas>
+<canvas id="overlay" hidden></canvas>
+<div id="edithint" hidden>Editing pumpkins. Drag one to move it. Esc or E to finish.</div>
 <aside id="nav">
   <h1>Funny Faces</h1>
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -120,17 +131,19 @@
   </section>
 
   <section class="pane" data-pane="layout">
-    <label>Size <input id="size" type="range" min="0.1" max="3" step="0.01" data-path="size"></label>
-    <label>Left / right <input id="x" type="range" min="-1" max="1" step="0.01" data-path="x"></label>
-    <label>Up / down <input id="y" type="range" min="-1" max="1" step="0.01" data-path="y"></label>
+    <button id="editbtn" class="primary" type="button">Edit pumpkins</button>
+    <small>Hides this menu so you can line pumpkins up on the real thing. Drag a pumpkin to move it. Drag a corner to skew it, a side to stretch it, the top dot to rotate it and the bottom ring to zoom it. Scroll over a pumpkin to zoom it. Press E or Esc to finish.</small>
+    <h2>All pumpkins together</h2>
+    <label>Size <input id="size" type="range" min="0.1" max="3" step="0.01"></label>
+    <label>Left / right <input id="x" type="range" min="-1" max="1" step="0.01"></label>
+    <label>Up / down <input id="y" type="range" min="-1" max="1" step="0.01"></label>
     <button id="reset" type="button">Center and reset size</button>
-    <h2>One pumpkin (the one picked on the Pumpkins tab)</h2>
-    <label>Nudge left / right <input type="range" min="-1" max="1" step="0.01" data-path="pk.dx"></label>
-    <label>Nudge up / down <input type="range" min="-1" max="1" step="0.01" data-path="pk.dy"></label>
-    <label>Size <input type="range" min="0.2" max="2" step="0.01" data-path="pk.scale"></label>
-    <label>Own color <input type="color" data-path="pk.color"></label>
     <button id="arrange" type="button">Re-arrange all pumpkins</button>
-    <small>With the menu hidden: drag the face to move it, scroll or pinch to resize. On a remote, the arrows move it; press Select to switch to size mode (up and down resize).</small>
+    <h2>One pumpkin (the one picked on the Pumpkins tab)</h2>
+    <button id="resetskew" type="button">Reset skew</button>
+    <label>Own color <input type="color" data-path="pk.color"></label>
+    <small>With the menu hidden and not editing: drag the faces to move them together, scroll or pinch to resize them all. On a remote, the arrows move them; press Select to switch to size mode (up and down resize).</small>
+    <small id="renderinfo"></small>
   </section>
 
   <section class="pane" data-pane="look">
