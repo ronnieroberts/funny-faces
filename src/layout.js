@@ -19,3 +19,19 @@ export function scale(l, factor) {
 }
 
 export const nudge = (l, dx, dy) => ({ ...l, x: clamp(l.x + dx, LIMITS.x), y: clamp(l.y + dy, LIMITS.y) });
+
+/** Several pumpkins: up to 4 in a row, more in two rows. Cells are square and touch.
+ *  Returns one {left, top, s} per pumpkin. x, y and size place the whole group; each pumpkin adds its own dx, dy (in
+ *  cell widths) and scale. For one pumpkin this is the same as placement(). */
+export function placeAll(w, h, { x, y, size }, pumpkins) {
+  const n = pumpkins.length, rows = n > 4 ? 2 : 1, cols = Math.ceil(n / rows);
+  const cell = Math.min(w / cols, h / rows) * size;
+  const cx = w / 2 + (x * w) / 2, cy = h / 2 + (y * h) / 2;
+  return pumpkins.map((p, i) => {
+    const row = rows === 2 ? (i < cols ? 0 : 1) : 0;
+    const inRow = rows === 2 ? (row === 0 ? cols : n - cols) : n, col = rows === 2 ? (row === 0 ? i : i - cols) : i;
+    const s = cell * p.scale;
+    const mx = cx + (col - (inRow - 1) / 2) * cell + p.dx * cell, my = cy + (row - (rows - 1) / 2) * cell + p.dy * cell;
+    return { s, left: mx - s / 2, top: my - s / 2 };
+  });
+}

@@ -32,6 +32,15 @@
   .face canvas { width:100%; aspect-ratio:1; border-radius:6px; background:#000; }
   #status, small { color:var(--muted); }
   body.screen #nav { display:none; }
+  .prow { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; align-items:center; margin:6px 0; padding:6px; border:1px solid var(--line); border-radius:8px; }
+  .prow .pick { text-align:left; }
+  .prow .pick[aria-pressed=true] { border-color:var(--accent, #e8741a); }
+  .prow .voice, .prow .trim { grid-column:2; display:none; }
+  body[data-mode=bands] .prow .voice, body[data-mode=bands] .prow .trim { display:block; }
+  .m-turns, .m-random, .m-bands { display:none; }
+  body[data-mode=turns] .m-turns, body[data-mode=random] .m-turns, body[data-mode=random] .m-random, body[data-mode=bands] .m-bands { display:block; }
+  output { float:right; color:var(--muted, #aaa); }
+  h2 { font-size:1em; margin:14px 0 4px; }
   #firsthint { margin:0 0 8px; padding-left:1.2em; }
   #meter { display:block; height:10px; background:#2a2a2a; border-radius:5px; overflow:hidden; margin-top:4px; }
   #meter i { display:block; height:100%; width:0; background:var(--accent, #e8741a); }
@@ -54,9 +63,11 @@
   <h1>Funny Faces</h1>
   <div class="tabs" role="tablist" aria-label="Sections">
     <button type="button" role="tab" data-tab="play" aria-selected="true">Play</button>
+    <button type="button" role="tab" data-tab="pumpkins" aria-selected="false">Pumpkins</button>
     <button type="button" role="tab" data-tab="faces" aria-selected="false">Faces</button>
     <button type="button" role="tab" data-tab="layout" aria-selected="false">Layout</button>
     <button type="button" role="tab" data-tab="look" aria-selected="false">Look</button>
+    <button type="button" role="tab" data-tab="advanced" aria-selected="false">Advanced</button>
     <button type="button" role="tab" data-tab="screens" aria-selected="false">Screens</button>
   </div>
 
@@ -67,28 +78,62 @@
     <button id="mic" type="button">Use microphone</button>
     <label id="filerow">Audio file <input id="file" type="file" accept="audio/*"></label>
     <label id="centrerow"><input id="centre" type="checkbox"> Singer focus: favor the centre of the stereo mix</label>
-    <small id="audiohint">Or open this page with <code>?audio=</code> and a link to a sound.</small>
+  </section>
+
+  <section class="pane" data-pane="pumpkins">
+    <label>How many <select id="count"></select></label>
+    <label>Who talks
+      <select id="mode" data-path="mode">
+        <option value="sync">All together, in sync</option>
+        <option value="bands">Each pumpkin listens to its own voice range</option>
+        <option value="turns">Take turns, one pumpkin per phrase</option>
+        <option value="random">Random pumpkin after each silence, with break-ins</option>
+      </select>
+    </label>
+    <label class="m-turns m-random">Pause before another pumpkin takes over <output data-for="turnPause"></output><input type="range" min="0.1" max="3" step="0.05" data-path="turnPause"></label>
+    <label class="m-random">Break-ins <output data-for="breakIns"></output><input type="range" min="0" max="1" step="0.05" data-path="breakIns"></label>
+    <div id="pumpkinlist"></div>
+    <small class="m-bands">Voice range and level are per pumpkin. A prepared song (an audio file) has no separate voice ranges, so it plays all together.</small>
+    <small>Press a pumpkin's name to edit its face (Faces tab) and position (Layout tab).</small>
   </section>
 
   <section class="pane" data-pane="faces">
+    <small>Choosing a face sets it for the pumpkin picked on the Pumpkins tab.</small>
     <label>Add faces <input id="packfile" type="file" accept=".json,application/json"></label>
     <small>A face pack is one JSON file. See docs/FACEPACK.md.</small>
     <div id="facelist"></div>
   </section>
 
   <section class="pane" data-pane="layout">
-    <label>Size <input id="size" type="range" min="0.1" max="3" step="0.01"></label>
-    <label>Left / right <input id="x" type="range" min="-1" max="1" step="0.01"></label>
-    <label>Up / down <input id="y" type="range" min="-1" max="1" step="0.01"></label>
+    <label>Size <input id="size" type="range" min="0.1" max="3" step="0.01" data-path="size"></label>
+    <label>Left / right <input id="x" type="range" min="-1" max="1" step="0.01" data-path="x"></label>
+    <label>Up / down <input id="y" type="range" min="-1" max="1" step="0.01" data-path="y"></label>
     <button id="reset" type="button">Center and reset size</button>
+    <h2>One pumpkin (the one picked on the Pumpkins tab)</h2>
+    <label>Nudge left / right <input type="range" min="-1" max="1" step="0.01" data-path="pk.dx"></label>
+    <label>Nudge up / down <input type="range" min="-1" max="1" step="0.01" data-path="pk.dy"></label>
+    <label>Size <input type="range" min="0.2" max="2" step="0.01" data-path="pk.scale"></label>
+    <label>Own color <input type="color" data-path="pk.color"></label>
+    <button id="arrange" type="button">Re-arrange all pumpkins</button>
     <small>With the menu hidden: drag the face to move it, scroll or pinch to resize. On a remote, the arrows move it; press Select to switch to size mode (up and down resize).</small>
   </section>
 
   <section class="pane" data-pane="look">
-    <label>Color <input id="color" type="color"></label>
-    <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05"></label>
-    <label>Sensitivity <input id="sens" type="range" min="-20" max="20" step="1"></label>
-    <label>Quiet cutoff <input id="gate" type="range" min="0" max="0.9" step="0.05"></label>
+    <label>Color <input id="color" type="color" data-path="color"></label>
+    <label>Glow <input id="glow" type="range" min="0" max="2" step="0.05" data-path="glow"></label>
+    <label>Resting brightness <small>(pumpkins that are not talking)</small> <output data-for="adv.idleDim"></output><input type="range" min="0" max="1" step="0.05" data-path="adv.idleDim"></label>
+  </section>
+
+  <section class="pane" data-pane="advanced">
+    <small>Make the pumpkins more or less reactive to sound. The Sound in bar on the Play tab shows what they hear.</small>
+    <label>Input sensitivity <small>(dB, how much the sound is boosted)</small> <output data-for="adv.inputDb"></output><input type="range" min="-30" max="30" step="1" data-path="adv.inputDb"></label>
+    <label>Output sensitivity <small>(how wide the mouth opens)</small> <output data-for="adv.outputGain"></output><input type="range" min="0.4" max="2" step="0.05" data-path="adv.outputGain"></label>
+    <label>Noise gate <small>(higher ignores quiet sound)</small> <output data-for="adv.gate"></output><input type="range" min="0" max="0.9" step="0.05" data-path="adv.gate"></label>
+    <label>Snappiness <small>(higher reacts faster and stops faster)</small> <output data-for="adv.snap"></output><input type="range" min="0" max="1" step="0.05" data-path="adv.snap"></label>
+    <label>Voice focus <small>(higher ignores drums and bass)</small> <output data-for="adv.voiceFocus"></output><input type="range" min="0" max="1" step="0.05" data-path="adv.voiceFocus"></label>
+    <label>Mouth shapes <small>(0 = plain open and close)</small> <output data-for="adv.shapeDetail"></output><input type="range" min="0" max="1" step="0.05" data-path="adv.shapeDetail"></label>
+    <button id="reset-adv" type="button">Reset advanced settings</button>
+    <small>A song you load as a file is analysed once with the noise gate it had at that moment; load it again to apply a new gate.</small>
   </section>
 
   <section class="pane" data-pane="screens">

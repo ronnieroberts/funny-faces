@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-const MAX = 70000;
+const MAX = 250000;
 
 export class Socket extends EventEmitter {
   constructor(socket) {
@@ -17,7 +17,10 @@ export class Socket extends EventEmitter {
   send(text) {
     if (this.closed) throw new Error('closed');
     const body = Buffer.from(text), n = body.length;
-    const head = n < 126 ? Buffer.from([0x81, n]) : Buffer.from([0x81, 126, n >> 8, n & 255]);
+    let head;
+    if (n < 126) head = Buffer.from([0x81, n]);
+    else if (n < 65536) head = Buffer.from([0x81, 126, n >> 8, n & 255]);
+    else { head = Buffer.alloc(10); head[0] = 0x81; head[1] = 127; head.writeUInt32BE(n, 6); }
     this.socket.write(Buffer.concat([head, body]));
   }
 
@@ -32,7 +35,7 @@ export class Socket extends EventEmitter {
       const fin = !!(b[0] & 0x80), op = b[0] & 15, masked = !!(b[1] & 0x80);
       let len = b[1] & 127, at = 2;
       if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); at = 4; }
-      else if (len === 127) return this.close();                       // far larger than any message we accept
+      else if (len === 127) { if (b.length < 10) return; if (b.readUInt32BE(2) !== 0) return this.close(); len = b.readUInt32BE(6); at = 10; }
       if (!masked || len > MAX) return this.close();                   // browsers always mask
       if (b.length < at + 4 + len) return;
       const mask = b.subarray(at, at + 4), out = Buffer.alloc(len);
