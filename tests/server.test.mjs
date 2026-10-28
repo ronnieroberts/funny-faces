@@ -68,7 +68,7 @@ test('saved sessions let a screen reconnect after a restart', () => {
   const r2 = new Relay({ sessions: store });
   const s2 = fakeConn(r2, 's', false);
   r2.handle('s', { action: 'screen', session });
-  assert.equal(s2.at(-1).type, 'paired');
+  assert.equal(s2[0].type, 'paired');                                   // (then admin_gone: nobody controls it yet)
 });
 
 test('origin and host checks', () => {

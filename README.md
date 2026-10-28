@@ -78,7 +78,7 @@ docker run -d -p 8765:8765 -v funny-faces-data:/data funny-faces
 ```
 
 Inside a container every browser looks like it is on the network, so the container always asks for a password
-(first visit sets it, with the setup code in the container logs). Open `http://localhost:8765/` on the host computer so the microphone works.
+(first visit sets it, with the setup code in the container logs; see Security and privacy for the lockout that all Docker clients share). `docker stop` saves the pairings first. Open `http://localhost:8765/` on the host computer so the microphone works.
 
 ### Just one screen, nothing to install
 
@@ -148,12 +148,37 @@ by `node scripts/make-christmas-pack.mjs`, which is also a handy example for mak
 - Music mixed into the input moves the mouth too. Separating voices needs a model (next step).
 - Safari on iOS needs a tap before audio starts and cannot capture tab audio.
 
+## Security and privacy
+
+- **The server never uses the internet.** It does not call out to anything, and there is no telemetry, tracking or
+  analytics. The page and all its code come from your own computer.
+- **Who can control what.** On the computer running Funny Faces, the control page needs no password. A TV or other
+  screen only gets the screen page and can do nothing until you type its code on the control page. Other devices can
+  open the control page only if you start with `FACES_LAN_CONTROL=1`, and then only after a password (set once, using
+  a setup code printed in the terminal window).
+- **Plain HTTP.** On the home network the page is served over plain `http`, not `https`, so the password is not
+  encrypted on its way from a phone to the computer. Anyone who can listen in on your Wi-Fi could read it. Use a password you
+  do not use anywhere else, and do not expose Funny Faces to the internet.
+- **Guessing is slowed down.** Eight wrong passwords lock an address out for a minute. Five wrong setup codes lock it
+  out for 15 minutes, and twenty wrong ones in total make the server print a fresh setup code. While locked out you
+  see "Too many wrong tries" with the time to wait. In Docker every browser reaches the server through the same
+  address, so one person's lockout applies to everyone until it ends.
+- **Limits.** One address may hold about 20 screen connections at once (`FACES_MAX_WS_PER_IP`), and the server
+  accepts about 256 connections in all (`FACES_MAX_CONNECTIONS`). Behind Docker all devices count as one address, so raise
+  the first number if you have many screens.
+- **Forgot the password?** Stop Funny Faces, delete `auth.json` from the data folder, and start it again. The first
+  visitor to the control page can then set a new password with the new setup code.
+- **Where your data lives.** In the data folder (`./data`, or `FACES_DATA`; in Docker the `/data` volume): `auth.json`
+  (the password, stored as a salted hash, and a secret for login cookies) and `sessions.json` (which screens are paired
+  and the last look of the faces). Both are readable only by you. Pairings are kept for 30 days. Faces and packs you add
+  stay in your browser.
+
 ## Making the downloads
 
 `node scripts/make-release.mjs --platform mac-arm64` (or `mac-x64`, `win-x64`, `linux-x64`) builds one zip in `release/`: the app, a copy of
-Node downloaded from nodejs.org and checked against its published SHA-256, a double-click launcher and a plain-language
+Node downloaded from nodejs.org and checked against its published SHA-256 (its licence is included as `runtime/LICENSE-node.txt`, with a `THIRD-PARTY-NOTICES.txt`), a double-click launcher and a plain-language
 READ ME FIRST. Pushing a tag like `v1.0.1` runs `.github/workflows/release.yml`, which builds all four and attaches them to a
-GitHub release. The downloads are not code-signed yet, hence the warnings described above.
+GitHub release together with a `SHA256SUMS` file (the tag must match the version in `package.json`; `v1.0.1-rc1` makes a test release). The downloads are not code-signed yet, hence the warnings described above.
 
 ## Tests
 
