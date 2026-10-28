@@ -109,6 +109,7 @@ Stop sharing in the browser to end it. This works in Chrome or Edge on a compute
 sound; on Windows a whole screen can too). TV browsers cannot do it: capture on the computer and let the TV screen
 follow. Tip: play the music in a Chrome tab and use Voice focus / Voice bands on the Advanced and Pumpkins tabs so
 each pumpkin follows its own part.
+
 ## Projectors: mirror, flip and keep-awake
 
 A projector behind a screen shows a mirrored picture, and a projector mounted upside down shows it upside down.
