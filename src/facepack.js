@@ -95,7 +95,7 @@ function flameSpec(v) {
 }
 
 export function validatePack(obj) {
-  if (!obj || obj.format !== FORMAT || obj.version !== 1) throw new Error('Not a pumpkin face pack (version 1)');
+  if (!obj || obj.format !== FORMAT || obj.version !== 1) throw new Error('Not a Funny Faces face pack (version 1)');
   if (!Array.isArray(obj.faces) || !obj.faces.length || obj.faces.length > LIMITS.faces) throw new Error('Pack has no faces or too many');
   const faces = obj.faces.map((f) => {
     if (!Array.isArray(f.layers) || !f.layers.length || f.layers.length > LIMITS.layers) throw new Error('Bad layer list');

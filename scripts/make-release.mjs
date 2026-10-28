@@ -71,14 +71,36 @@ Talking faces for pumpkins, snowmen and more, on your computer and any TV on you
 
 TO START
 1. Double-click "${launcher}".
-${os === 'mac' ? `   The first time, your Mac may say it cannot check the app. That is expected for a free download.
-   Right-click (or Control-click) "${launcher}", choose Open, then choose Open again.
-` : os === 'win' ? `   The first time, Windows may show "Windows protected your PC". Click "More info", then "Run anyway".
-` : ''}2. A black window opens with two web addresses, and Chrome opens the control page.
+${os === 'mac' ? `   The first time, your Mac blocks it ("Not Opened"). See "THE FIRST TIME" below.
+` : os === 'win' ? `   The first time, Windows may show "Windows protected your PC". See "THE FIRST TIME" below.
+` : `   If nothing happens, see "THE FIRST TIME" below.
+`}2. A black window opens with two web addresses, and Chrome opens the control page.
    Leave the black window open. Closing it stops Funny Faces.
 3. If the computer asks to allow network access, choose Allow. A TV cannot connect without it.
 4. In Chrome press "Use microphone", choose Allow, and talk. The mouth should move.
 
+THE FIRST TIME
+Funny Faces is a hobby project, so this app is not signed with a paid developer certificate. Your computer will warn
+about that. It is safe to continue: Funny Faces runs only on your local network and sends nothing to the internet.
+${os === 'mac' ? `
+Option A (no Terminal):
+  1. Double-click "${launcher}". When the "Not Opened" dialog appears, click Done (or OK).
+  2. Open System Settings, then Privacy & Security.
+  3. Scroll down to the message about "${launcher}" and click "Open Anyway".
+  4. Confirm (your Mac may ask for your password or Touch ID). Funny Faces now starts.
+  You only need to do this once.
+
+Option B (Terminal): type the following, then press Return. To fill in the folder, drag the unzipped "Funny Faces"
+folder onto the Terminal window after typing "xattr -dr com.apple.quarantine ".
+  xattr -dr com.apple.quarantine <the unzipped Funny Faces folder>
+Then double-click "${launcher}" as usual.
+` : os === 'win' ? `
+If Windows shows "Windows protected your PC" (SmartScreen): click "More info", then "Run anyway".
+` : `
+Make the launcher runnable once, then run it. In a terminal, in this folder:
+  chmod +x "${launcher}"
+  ./"${launcher}"
+`}
 TO USE A TV OR PROJECTOR
 1. On the control page open the Screens tab. It shows an address and a QR code.
 2. On the TV open its web browser (on a Fire TV: Silk) and type that address.

@@ -35,7 +35,7 @@ test('packs: add, replace, reject reserved id, remove', () => {
 });
 test('packs: bad files are rejected', () => {
   assert.throws(() => parsePack('{nope'), /not valid JSON/);
-  assert.throws(() => parsePack('{"format":"x"}'), /Not a pumpkin face pack/);
+  assert.throws(() => parsePack('{"format":"x"}'), /Not a Funny Faces face pack/);
   assert.throws(() => parsePack('x'.repeat(3 * 1024 * 1024)), /too large/);
 });
 test('packs: stored and found by key or bare id', () => {

@@ -66,7 +66,7 @@ There are two ways to use a pack:
 - **Add a pack from a file.** The **Add faces** button on the Faces tab keeps the pack in this browser only.
 
 Each `id` must be unique. If a folder pack and a stored pack share an `id`, the folder pack is shown; the built-in pack's `id`
-is reserved. Each pumpkin picks its face from the **Face** list.
+is reserved. Each face on the stage picks its look from the **Face** list.
 
 ## Design guidance
 
@@ -74,7 +74,7 @@ Faces are drawn on a 100 x 100 square, and the same face is shown on every scree
 
 **Movement.** The mouth is the part that moves most: it blends between `top` (closed) and `open` (fully open) many times a second while the voice is going.
 - Keep the open mouth's lowest point within about 35 units of the closed edge (the starter pack uses 14 to 32). More than that and the jaw looks like it falls off.
-- Keep the whole face inside roughly x 8 to 92 and y 6 to 94. The app accepts -20 to 120, but anything outside the square is clipped or runs into the next pumpkin.
+- Keep the whole face inside roughly x 8 to 92 and y 6 to 94. The app accepts -20 to 120, but anything outside the square is clipped or runs into the next face.
 - `react.dy` moves a shape up or down as the voice gets louder. Use 2 to 5 for eyebrows. The limit is 20, but above about 6 the brows bounce and are tiring to watch for a whole song.
 - Keep `widthRange` between about 0.7 and 1.2. The limit is 0.3 to 2, but a mouth that swings from narrow to very wide on every syllable looks like a flapping puppet.
 - A `thick` of 1 to 2.5 reads well from across a room. Thin lines vanish on a projector.
@@ -84,11 +84,11 @@ Faces are drawn on a 100 x 100 square, and the same face is shown on every scree
 
 **Fire is expensive.** A `flame` on a shape or `fire: true` on a mouth is redrawn many times a second. Use it on at most 3 or 4 layers per face. Eight fire faces on one projector can make the picture stutter on a weak computer; fewer flames helps more than anything else.
 
-**Colour.** A pack has no colours. The person running the show picks the colour on the Look tab, and each pumpkin can have its own. Design in one colour: shapes lit on a dark background.
+**Colour.** A pack has no colours. The person running the show picks the colour on the Look tab, and each face can have its own. Design in one colour: shapes lit on a dark background.
 
 **Do not copy characters.** Do not make faces of cartoon, film or game characters or brand mascots. Faces from your own idea are fine to share; set `license` to say how others may use them.
 
-**Test it small.** Add the pack, put the face on a pumpkin, play a song and watch for a minute. If the mouth looks wrong, reduce the open depth; if the whole face jumps, reduce `react.dy`.
+**Test it small.** Add the pack, put the face on the stage, play a song and watch for a minute. If the mouth looks wrong, reduce the open depth; if the whole face jumps, reduce `react.dy`.
 
 ## Making a pack with an AI assistant
 
