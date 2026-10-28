@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { moveQuad, scaleQuad, rotateQuad, resetSkew, dragCorner, scaleCorner, stretchAlongEdge, pointInQuad, hitTest, handlesOf,
   applyDrag, isValid, sanitizeQuad, squareQuad, sizeOf, centroid, gridQuads, moveAll, scaleAll, quadQ, screenSize,
   pointerToStage, viewSigns, viewDelta, MIN_SIZE, RANGE } from '../src/quad.js';
-import { tileSize } from '../src/stage.js';
+import { tileSize } from '../src/quality.js';
 
 const A = 16 / 9;
 const sq = () => squareQuad(0.5, 0.5, 0.4, A);

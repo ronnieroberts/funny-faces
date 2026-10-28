@@ -270,11 +270,14 @@ export function drawFace(ctx, face, S, st) {
   ctx.fillRect(0, 0, S, S);
   ctx.globalAlpha = clamp01(st.alpha);
   ctx.fillStyle = ctx.shadowColor = st.color;
-  ctx.shadowBlur = st.glow * S * 0.035;
+  const blur = st.shadow === false ? 0 : st.glow * S * 0.035;         // soft halo round plain shapes; flames carry their own glow
+  const detail = st.detail || 1;                                      // 1 = every flame tongue, less = fewer (faster)
+  ctx.shadowBlur = blur;
   ctx.setTransform(k, 0, 0, k, 0, 0);
 
   const mirrorPts = (pts) => pts.map(([x, y]) => [100 - x, y]).reverse();
   face.layers.forEach((l, li) => {
+    ctx.shadowBlur = st.cheapGlow && (l.flame || l.fire) ? 0 : blur;   // a blurred shadow under translucent flames costs most of the drawing time
     if (l.kind === 'shape') {
       const variants = l.mirror ? [l.points, mirrorPts(l.points)] : [l.points];
       variants.forEach((pts, vi) => {
@@ -286,7 +289,7 @@ export function drawFace(ctx, face, S, st) {
         if (l.flame) {
           const ys = moved.map((p) => p[1]), xs = moved.map((p) => p[0]);
           const top = Math.min(...ys), bottom = Math.max(...ys), left = Math.min(...xs), right = Math.max(...xs);
-          const { cols, width } = contour(moved, Math.max(4, Math.min(12, Math.round((right - left) / 3))));
+          const { cols, width } = contour(moved, Math.max(3, Math.min(12, Math.round(((right - left) / 3) * detail))));
           // flames first, so they sit behind the shape and rise from its top edge
           crown(ctx, cols, width, l.flame.height * l.flame.intensity * lift * (1 - 0.8 * st.blink), t, li * 3.1 + vi * 5.3);
           ctx.save();
@@ -318,10 +321,10 @@ export function drawFace(ctx, face, S, st) {
         tracePath(ctx, poly, false);
         ctx.fill();
         ctx.restore();
-        const { cols, width } = contour(poly, 12, true);
+        const { cols, width } = contour(poly, Math.max(4, Math.round(12 * detail)), true);
         tongues(ctx, cols, width, span * 1.2 + 4 + 5 * st.energy, t, li * 3.1 + 11.7);
         // the lip itself flickers too, so even a closed mouth is a line of fire
-        const lip = contour(poly.slice(0, n), 12);
+        const lip = contour(poly.slice(0, n), Math.max(4, Math.round(12 * detail)));
         tongues(ctx, lip.cols, lip.width, 5 * lift, t, li * 3.1 + 17.3);
       } else {
         tracePath(ctx, poly, false);
