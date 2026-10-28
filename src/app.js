@@ -1,5 +1,6 @@
 import { drawFace } from './facepack.js';
-import { LiveVoice } from './voice.js';
+import { LiveVoice, TrackVoice } from './voice.js';
+import { analyze } from './track.js';
 import { load, save } from './settings.js';
 import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
 import { placement, drag, scale, nudge } from './layout.js';
@@ -238,16 +239,43 @@ function showTab(name) {
 for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
 
 // ---------------------------------------------------------------- audio
-let audio = null, voice = null, stream = null, el = null;
+let audio = null, voice = null, live = null, stream = null, el = null;
 const audioUrl = globalThis.FACE_MIC_ONLY ? null : params.get('audio');
 function ensureAudio() {
-  if (!audio) { audio = new AudioContext(); voice = new LiveVoice(audio); }
+  if (!audio) { audio = new AudioContext(); live = voice = new LiveVoice(audio); }
   if (audio.state === 'suspended') audio.resume();
 }
 function stopSources() {
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (el) { el.pause(); el = null; }
-  if (voice) try { voice.analyser.disconnect(); } catch { /* not connected */ }
+  if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } voice = live; }
+}
+// A file or link is analysed once, in this browser, into a mouth track; if that fails the sound is analysed live instead.
+const trackCache = new Map();                              // url and option -> track, so pressing Play again does not re-analyse
+async function playTrack(url, label, bytes) {
+  ensureAudio();
+  try {
+    const key = url + '|' + $('centre').checked;
+    let track = trackCache.get(key);
+    if (!track) {
+    say('Analysing ' + label + '…');
+    const buf = await audio.decodeAudioData(bytes ? await bytes() : await (await fetch(url)).arrayBuffer());
+    const mid = new Float32Array(buf.length), side = buf.numberOfChannels > 1 ? new Float32Array(buf.length) : null;
+    const a = buf.getChannelData(0), b = side ? buf.getChannelData(1) : null;
+    for (let i = 0; i < mid.length; i++) { mid[i] = b ? (a[i] + b[i]) / 2 : a[i]; if (side) side[i] = (a[i] - b[i]) / 2; }
+    track = await analyze({ mid, side, sampleRate: buf.sampleRate }, { centre: $('centre').checked, gate: settings.gate,
+      onProgress: (p) => say(`Analysing ${label}… ${Math.round(p * 100)}%`) });
+    trackCache.set(key, track);
+    }
+    stopSources();
+    el = new Audio(url);
+    el.crossOrigin = 'anonymous';
+    el.loop = params.get('loop') !== '0';
+    voice = new TrackVoice(track, () => (el ? el.currentTime : 0));
+    await el.play();
+    say('Playing ' + label + ' with a mouth track (' + Math.round(track.data.length / 2 / track.fps) + ' s analysed)');
+    return true;
+  } catch { return playUrl(url, label); }
 }
 function playUrl(url, label) {
   ensureAudio(); stopSources();
@@ -271,7 +299,7 @@ $('mic').addEventListener('click', () => useMic().catch(() => {}));
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
   if (!f) return;
-  playUrl(URL.createObjectURL(f), f.name).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
+  playTrack(URL.createObjectURL(f), f.name, () => f.arrayBuffer()).then((ok) => { if (!ok) say('Press play again; the browser blocked autoplay'); });
 });
 
 // ---------------------------------------------------------------- menu and full screen
@@ -282,7 +310,7 @@ function showMenu(on) { nav.classList.toggle('hidden', !on); if (on) $('play').f
 
 async function start() {
   if (audioUrl) {
-    if (!(await playUrl(audioUrl, 'the audio'))) { say('The audio could not be played'); return; }
+    if (!(await playTrack(audioUrl, 'the audio'))) { say('The audio could not be played'); return; }
   } else if (!stream && !el) {
     try { await useMic(); } catch { return; }        // the status line says why
   } else if (el) {
@@ -297,7 +325,7 @@ $('fs').addEventListener('click', () => {
   document.documentElement.requestFullscreen().catch(() => {});
 });
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !screenMode) showMenu(true); });
-if (audioUrl && !screenMode) playUrl(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
+if (audioUrl && !screenMode) playTrack(audioUrl, 'the audio').then((ok) => { if (ok) showMenu(false); else say('Press Play to start the sound'); });
 
 // ---------------------------------------------------------------- size and move
 const pointers = new Map();

@@ -1,4 +1,4 @@
-"""Relay for Face Characters: pairs display screens with an admin page and forwards what the admin sends.
+"""Relay for Funny Faces: pairs display screens with an admin page and forwards what the admin sends.
 
 API Gateway WebSocket -> this Lambda -> DynamoDB. The admin sends the character/settings (rarely) and the
 mouth values (about 15 a second); every paired screen receives them. Messages are JSON with an "action".

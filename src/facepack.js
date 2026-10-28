@@ -21,7 +21,7 @@ function zigMouth({ x0 = 22, x1 = 78, y = 68, n = 14, tooth = 2.5, depth = 22, f
     const curve = flat ? 1 : 1 - (2 * t - 1) ** 2;
     open.push([x, +(y + depth * (flat ? 1 : 0.15 + 0.85 * curve)).toFixed(2)]);
   }
-  return { kind: 'mouth', top, open, thick, widthRange: [0.88, 1.08] };
+  return { kind: 'mouth', top, open, thick, widthRange: [0.62, 1.12] };
 }
 
 const nose = (y = 46, w = 4.5, h = 8) => ({

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="relay" content="">
-<title>Face Characters</title>
+<title>Funny Faces</title>
 <style>
   :root { --bg:#000; --fg:#eee; --muted:#9a9a9a; --panel:#111; --line:#2a2a2a; --accent:#ff8a1f; }
   * { box-sizing:border-box; }
@@ -45,7 +45,7 @@
 <body>
 <canvas id="stage"></canvas>
 <aside id="nav">
-  <h1>Face Characters</h1>
+  <h1>Funny Faces</h1>
   <div class="tabs" role="tablist" aria-label="Sections">
     <button type="button" role="tab" data-tab="play" aria-selected="true">Play</button>
     <button type="button" role="tab" data-tab="faces" aria-selected="false">Faces</button>
@@ -58,6 +58,7 @@
     <button id="play" class="primary" type="button" autofocus>Play and full screen</button>
     <button id="mic" type="button">Use microphone</button>
     <label id="filerow">Audio file <input id="file" type="file" accept="audio/*"></label>
+    <label id="centrerow"><input id="centre" type="checkbox"> Singer focus: favor the centre of the stereo mix</label>
     <small id="audiohint">Or open this page with <code>?audio=</code> and a link to a sound.</small>
   </section>
 
