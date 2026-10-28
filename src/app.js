@@ -4,7 +4,7 @@ import { analyze } from './track.js';
 import { qrSvg } from './qr.js';
 import { load, save, resize, arrange, ADV_DEFAULTS, MAX_PUMPKINS, VOICE_NAMES } from './settings.js';
 import { Stage } from './stage.js';
-import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES } from './packs.js';
+import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFace, builtIn, MAX_FILE_BYTES, mergePacks, loadFolderPacks, describeProblems } from './packs.js';
 import { drag, scale, nudge } from './layout.js';
 import { moveAll, scaleAll, resetSkew, viewDelta } from './quad.js';
 import { createEditor } from './editor.js';
@@ -58,7 +58,9 @@ $('reset-adv').addEventListener('click', () => { Object.assign(settings.adv, ADV
 syncControls();
 
 // ---------------------------------------------------------------- faces and packs
-let faces = allFaces(packs);
+let folderPacks = [];                               // from the packs folder: re-read on every load, never removable here
+const shownPacks = () => mergePacks(packs, folderPacks);
+let faces = allFaces(shownPacks());
 if (params.get('face')) settings.pumpkins[0].face = params.get('face');
 
 function thumb(entry) {
@@ -72,14 +74,15 @@ function renderFaces() {
   const root = $('facelist');
   root.replaceChildren();
   const cur = findFace(faces, settings.pumpkins[sel].face);
-  const packList = [builtIn(), ...packs];
+  const packList = [builtIn(), ...shownPacks()];
   for (const p of packList) {
     const h = document.createElement('h2');
     h.append(document.createTextNode(p.name));
-    if (p.id !== builtIn().id) {
+    if (folderPacks.includes(p)) h.append(Object.assign(document.createElement('small'), { textContent: ' from the packs folder' }));
+    else if (p.id !== builtIn().id) {
       const rm = Object.assign(document.createElement('button'), { type: 'button', className: 'danger', textContent: 'Remove' });
       rm.addEventListener('click', () => {
-        packs = removePack(packs, p.id); savePacks(packs); faces = allFaces(packs); renderFaces(); toast('Removed ' + p.name);
+        packs = removePack(packs, p.id); savePacks(packs); faces = allFaces(shownPacks()); renderFaces(); toast('Removed ' + p.name);
       });
       h.append(rm);
     }
@@ -102,22 +105,19 @@ $('packfile').addEventListener('change', async () => {
   try {
     if (f.size > MAX_FILE_BYTES) throw new Error('That file is too large');
     const pack = parsePack(await f.text());
-    packs = addPack(packs, pack);
+    packs = addPack(packs, pack, folderPacks);
     if (!savePacks(packs)) toast('Added, but this browser would not keep it');
-    faces = allFaces(packs);
+    faces = allFaces(shownPacks());
     settings.pumpkins[sel].face = `${pack.id}/${pack.faces[0].id}`; persist();
     renderFaces(); renderPumpkins(); say(`Added ${pack.name} (${pack.faces.length} faces)`);
   } catch (e) { say(e.message || 'Could not add that pack'); }
 });
 
-if (params.get('pack')) {                           // ?pack=<url>: use a pack for this visit only
-  fetch(params.get('pack')).then((r) => r.text()).then((t) => {
-    const pack = parsePack(t);
-    faces = allFaces([...packs.filter((p) => p.id !== pack.id), pack]);
-    if (!params.get('face')) settings.pumpkins[0].face = `${pack.id}/${pack.faces[0].id}`;
-    renderFaces();
-  }).catch(() => say('Could not load that pack'));
-}
+loadFolderPacks().then(({ packs: found, problems }) => {      // the packs folder on the server, offered next to the built-in faces
+  if (problems.length) $('packnotice').textContent = 'Some files in the packs folder were skipped:\n' + describeProblems(problems).join('\n');
+  if (!found.length) return;
+  folderPacks = found; faces = allFaces(shownPacks()); renderFaces(); renderPumpkins();
+});
 renderFaces();
 
 // ---------------------------------------------------------------- pumpkins: how many, which voice each listens to
