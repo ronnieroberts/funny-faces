@@ -40,8 +40,16 @@ export const STARTER_PACK = {
       nose(48), zigMouth({ x0: 24, x1: 76, y: 66, n: 12, tooth: 1.2, depth: 24 }),
     ] },
     { id: 'cat', name: 'Cat', layers: [
-      { kind: 'shape', points: [[16, 36], [32, 24], [44, 34], [30, 42]], mirror: true, blink: true, smooth: true },
-      nose(50, 4, 6), zigMouth({ x0: 28, x1: 72, y: 66, n: 10, tooth: 1.2, depth: 14 }),
+      // Pointed ears, diamond slit eyes, a small nose, three whiskers a side and a tiny "w" mouth that opens.
+      { kind: 'shape', points: [[12, 34], [20, 8], [38, 30]], mirror: true, react: { dy: -2 } },
+      { kind: 'shape', points: [[32, 40], [40, 51], [32, 62], [24, 51]], mirror: true, blink: true },
+      { kind: 'shape', points: [[43, 64], [57, 64], [50, 71]] },
+      ...[[68, -6], [74, 1], [80, 8]].map(([y, dy]) => ({
+        kind: 'shape', points: [[8, y + dy], [30, y + 3], [30, y + 5.6], [8, y + dy + 2.3]], mirror: true,
+      })),
+      { kind: 'mouth', thick: 2, widthRange: [0.8, 1.1],
+        top: [[37, 75], [43.5, 79.5], [50, 75], [56.5, 79.5], [63, 75]],
+        open: [[37, 78], [43.5, 91], [50, 86], [56.5, 91], [63, 78]] },
     ] },
     { id: 'angry', name: 'Angry', layers: [
       { kind: 'shape', points: [[16, 22], [44, 36], [40, 44], [16, 38]], mirror: true, blink: true, react: { dy: -3 } },
@@ -259,7 +267,7 @@ function crown(ctx, pts, colWidth, height, t, seed, dip = 2.5) {
 }
 
 /** Draw one face on an S x S canvas context.
- *  st = {open, bright, blink, energy, color, glow, alpha, time?}  (time in seconds animates flames) */
+ *  st = {open, bright, blink, energy, color, glow, alpha, sad?, time?}  (time in seconds animates flames; sad 0..1 frowns and droops the eyes) */
 export function drawFace(ctx, face, S, st) {
   const k = S / 100, t = st.time || 0, lift = 1 + 0.6 * st.energy;
   FIRE = firePalette(st.color);
@@ -284,7 +292,7 @@ export function drawFace(ctx, face, S, st) {
         let cy = 0;
         for (const p of pts) cy += p[1];
         cy /= pts.length;
-        const sy = l.blink ? 1 - 0.9 * st.blink : 1, dy = l.react.dy * st.energy;
+        const sad = st.sad || 0, sy = (l.blink ? 1 - 0.9 * st.blink : 1) * (l.blink ? 1 - 0.15 * sad : 1), dy = l.react.dy * st.energy + (l.blink ? 2.5 * sad : 0);   // a sad face lets its eyes droop
         const moved = pts.map(([x, y]) => [x, cy + (y - cy) * sy + dy]);
         if (l.flame) {
           const ys = moved.map((p) => p[1]), xs = moved.map((p) => p[0]);
@@ -306,11 +314,15 @@ export function drawFace(ctx, face, S, st) {
       const o = clamp01(st.open * (1 - 0.45 * st.bright));
       const wf = l.widthRange[0] + (l.widthRange[1] - l.widthRange[0]) * (1 - st.bright);
       const wx = (x) => 50 + (x - 50) * wf;
-      const n = l.top.length, poly = [];
-      for (let i = 0; i < n; i++) poly.push([wx(l.top[i][0]), l.top[i][1]]);
+      const n = l.top.length, poly = [], sad = st.sad || 0;
+      // A frown bends the mouth into an arch: the middle rises and the corners stay, so it turns down at the ends.
+      let x0 = Infinity, x1 = -Infinity;
+      for (const p of l.top) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; }
+      const arch = (x) => (sad ? -sad * 9 * (1 - ((2 * (x - x0)) / Math.max(1, x1 - x0) - 1) ** 2) : 0);
+      for (let i = 0; i < n; i++) poly.push([wx(l.top[i][0]), l.top[i][1] + arch(l.top[i][0])]);
       for (let i = n - 1; i >= 0; i--) {
-        const closed = l.top[i][1] + l.thick;
-        poly.push([wx(l.open[i][0]), Math.max(closed, closed + (l.open[i][1] - closed) * o)]);
+        const closed = l.top[i][1] + l.thick + arch(l.top[i][0]);
+        poly.push([wx(l.open[i][0]), Math.max(closed, closed + (l.open[i][1] + arch(l.open[i][0]) - closed) * o)]);
       }
       if (l.fire) {
         const ys = poly.map((p) => p[1]);

@@ -16,7 +16,7 @@ const burns = (face) => {
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas; this.perf = { tile: 0, gl: 0 }; this.tiles = []; this.state = []; this.ctx = null; this.gl = null;
-    this.items = []; this.keyBuf = new Array(10).fill(0); this.st = {};
+    this.items = []; this.keyBuf = new Array(11).fill(0); this.st = {};
     this.quality = 'auto'; this.governor = new Governor(); this.level = 0;
     this.lever = { skip: true, cap: true, upload: true, glow: true, detail: true };   // switched off one by one by the benchmark, to measure each
     try { this.gl = new GLStage(canvas); this.mode = 'webgl2'; }
@@ -67,7 +67,7 @@ export class Stage {
       const tile = this.tiles[i] || (this.tiles[i] = document.createElement('canvas'));
       const resized = tile.width !== px;
       if (resized) tile.width = tile.height = px;
-      st.open = m.open; st.bright = m.bright; st.energy = m.energy; st.color = color; st.glow = look.glow; st.level = this.level;
+      st.open = m.open; st.bright = m.bright; st.energy = m.energy; st.color = color; st.glow = look.glow; st.level = this.level; st.sad = look.sad || 0;
       st.blink = ps.blink > 0.5 ? 1 : ps.blink * 2;
       st.alpha = many ? look.idleDim + (1 - look.idleDim) * active : 1;     // a quiet pumpkin dims when others talk
       const flame = burns(p.face), key = tileKey(this.keyBuf, st, px, flame, hz, t, i, color);
