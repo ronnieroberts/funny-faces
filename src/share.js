@@ -17,13 +17,13 @@ export function buildState(settings, faceFor, epoch = 0) {
 export function parseState(obj) {
   if (!obj || typeof obj !== 'object' || !Array.isArray(obj.pumpkins) || !obj.faces || typeof obj.faces !== 'object') return null;
   try {
-    const faces = {};
+    const faces = Object.create(null);   // no inherited keys: a face called 'toString' must not match
     for (const [key, f] of Object.entries(obj.faces).slice(0, MAX_PUMPKINS)) {
       faces[key] = validatePack({ format: FORMAT, version: 1, id: 'shared', name: 'Shared', faces: [f] }).faces[0];
     }
     const s = sanitize({ color: obj.color, glow: obj.glow, x: obj.x, y: obj.y, size: obj.size, adv: { idleDim: obj.idleDim },
       pumpkins: obj.pumpkins.slice(0, MAX_PUMPKINS).map((p) => ({ ...p, voice: 'full', enabled: true })) });
-    const pumpkins = s.pumpkins.map((p, i) => ({ face: faces[obj.pumpkins[i].face], quad: p.quad, color: p.color }));   // quad: re-validated, or the default place if it was bad
+    const pumpkins = s.pumpkins.map((p, i) => ({ face: Object.hasOwn(faces, obj.pumpkins[i].face) ? faces[obj.pumpkins[i].face] : undefined, quad: p.quad, color: p.color }));   // quad: re-validated, or the default place if it was bad
     if (!pumpkins.length || pumpkins.some((p) => !p.face)) return null;
     const epoch = Number.isInteger(obj.epoch) && obj.epoch >= 0 && obj.epoch < 2 ** 31 ? obj.epoch : 0;
     return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins };

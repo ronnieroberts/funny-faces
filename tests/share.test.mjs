@@ -73,3 +73,9 @@ test('a bad quad from the network is replaced, not drawn', () => {
   assert.equal(s.pumpkins[1].quad.length, 4);
   assert.ok(s.pumpkins.every((p) => p.quad.flat().every((n) => Number.isFinite(n) && n >= -0.5 && n <= 1.5)));
 });
+
+test('parseState: a face key that names an inherited property is not a face', () => {
+  const st = buildState(three, faceFor, 1);
+  st.pumpkins[0].face = 'toString';
+  assert.equal(parseState(st), null);
+});
