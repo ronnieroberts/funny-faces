@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.0.1
+## 1.0.2
+
+1.0.1 was only the rename to Funny Faces; this is the first full release.
 
 - Much faster drawing: eight flame faces went from about 55 ms to about 5 ms per frame (a blurred shadow under the translucent flames was most of the cost). Tiles are redrawn and uploaded only when they change, and are capped by pumpkin count.
 - Advanced tab: Quality Auto / Full / Lite. Auto lowers detail when the frame rate stays under about 30 and raises it again carefully; display screens use Auto.
