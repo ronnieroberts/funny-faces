@@ -29,7 +29,7 @@ const nose = (y = 46, w = 4.5, h = 8) => ({
 });
 
 export const STARTER_PACK = {
-  format: FORMAT, version: 1, id: 'starter', name: 'Starter Pack', author: 'Pumpkin Faces', license: 'Free',
+  format: FORMAT, version: 1, id: 'starter', name: 'Starter Pack', author: 'Funny Faces', license: 'Free',
   faces: [
     { id: 'classic', name: 'Classic Triangle', layers: [
       { kind: 'shape', points: [[22, 36], [40, 36], [31, 14]], mirror: true, blink: true, react: { dy: -3 } },

@@ -233,7 +233,7 @@ one-off try; use the folder for packs you want on every device that controls Fun
 ## Making the downloads
 
 `node scripts/make-release.mjs --platform mac-arm64` (or `mac-x64`, `win-x64`, `linux-x64`) builds one zip in `release/`: the app, a copy of
-Node downloaded from nodejs.org and checked against its published SHA-256 (its licence is included as `runtime/LICENSE-node.txt`, with a `THIRD-PARTY-NOTICES.txt`), a double-click launcher and a plain-language
+Node downloaded from nodejs.org and checked against its published SHA-256 (its license is included as `runtime/LICENSE-node.txt`, with a `THIRD-PARTY-NOTICES.txt`), a double-click launcher and a plain-language
 READ ME FIRST. Pushing a tag like `v1.0.1` runs `.github/workflows/release.yml`, which builds all four and attaches them to a
 GitHub release together with a `SHA256SUMS` file (the tag must match the version in `package.json`; `v1.0.1-rc1` makes a test release). The downloads are not code-signed yet, hence the warnings described above.
 
@@ -247,6 +247,6 @@ npm test
 
 Never commit credentials, tokens, IP addresses or private hostnames. Use placeholders in docs (192.168.1.23 above is an example).
 
-## Licence
+## License
 
-MIT. See `LICENSE`. The downloads bundle Node.js, which has its own licence.
+MIT. See `LICENSE`. The downloads bundle Node.js, which has its own license.

@@ -67,7 +67,7 @@ export function sanitize(o, A = DEFAULT_ASPECT) {
   s.breakIns = num(o.breakIns, 0, 1, DEFAULTS.breakIns);
   const a = o.adv && typeof o.adv === 'object' ? o.adv : {};
   s.adv = {
-    inputDb: num(a.inputDb ?? o.sens, -30, 30, 0),                 // o.sens and o.gate: settings saved before 1.0.2
+    inputDb: num(a.inputDb ?? o.sens, -30, 30, 0),                 // o.sens and o.gate: older saved settings, migrated here
     outputGain: num(a.outputGain, 0.4, 2, 1), gate: num(a.gate ?? o.gate, 0, 0.9, ADV_DEFAULTS.gate),
     snap: num(a.snap, 0, 1, ADV_DEFAULTS.snap), voiceFocus: num(a.voiceFocus, 0, 1, ADV_DEFAULTS.voiceFocus),
     shapeDetail: num(a.shapeDetail, 0, 1, 1), idleDim: num(a.idleDim, 0, 1, ADV_DEFAULTS.idleDim),

@@ -3,7 +3,7 @@
 //   node scripts/make-release.mjs --platform mac-arm64|mac-x64|win-x64|linux-x64 [--out release] [--node-binary <file> --node-license <file>]
 // Without --node-binary it downloads the official Node build from nodejs.org (--node-version or FACES_NODE_VERSION, else
 // the version running this script) and checks it against nodejs.org's published SHA-256 list before using it.
-// Node's own LICENSE (from that archive) goes into the zip as runtime/LICENSE-node.txt, with THIRD-PARTY-NOTICES.txt.
+// The project LICENSE (MIT) goes into the zip root. Node's own LICENSE (from that archive) goes into the zip as runtime/LICENSE-node.txt, with THIRD-PARTY-NOTICES.txt.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -55,11 +55,12 @@ export FACES_NO_BUILD=1 FACES_OPEN=1 FACES_DATA="\${XDG_DATA_HOME:-$HOME/.local/
 const NOTICES = `THIRD-PARTY NOTICES
 ===================
 
-Funny Faces itself has no third-party code: it is plain JavaScript with no dependencies.
+Funny Faces itself has no third-party code: it is plain JavaScript with no dependencies. It is released under the
+MIT license; the full text is in the file LICENSE next to this one.
 
 This download bundles Node.js (the program in the "runtime" folder), which runs Funny Faces. Node.js is not part of
-Funny Faces. It is distributed under its own licence, the full text of which is in runtime/LICENSE-node.txt
-(Node.js is copyright Node.js contributors and others; see that file for the terms and for the licences of the
+Funny Faces. It is distributed under its own license, the full text of which is in runtime/LICENSE-node.txt
+(Node.js is copyright Node.js contributors and others; see that file for the terms and for the licenses of the
 components Node.js itself includes). Node.js is unmodified, as published by the Node.js project at https://nodejs.org.
 `;
 
@@ -89,6 +90,9 @@ IF SOMETHING GOES WRONG
 - The code is not accepted: codes last 10 minutes. Reload the TV page for a new one.
 
 Everything stays on your own network. Nothing is sent to the internet.
+
+Funny Faces is free software under the MIT license (see the file LICENSE). The bundled Node.js has its own license;
+see THIRD-PARTY-NOTICES.txt.
 `;
 
 function download(url, to) {
@@ -128,6 +132,7 @@ try {
   chmodSync(join(root, 'runtime', basename(spec.bin)), 0o755);
   cpSync(licenseFile, join(root, 'runtime', 'LICENSE-node.txt'));
   mkdirSync(join(root, 'packs')); cpSync('packs/README.txt', join(root, 'packs/README.txt'));   // where people drop face packs
+  cpSync('LICENSE', join(root, 'LICENSE'));
   writeFileSync(join(root, 'THIRD-PARTY-NOTICES.txt'), NOTICES.replace(/\n/g, os === 'win' ? '\r\n' : '\n'));
   const launcher = join(root, spec.launcher);
   writeFileSync(launcher, LAUNCHERS[os === 'win' ? 'win' : os === 'mac' ? 'mac' : 'linux']);

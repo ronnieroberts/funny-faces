@@ -31,7 +31,8 @@
   .foot { padding:10px 16px; border-top:1px solid var(--line); display:grid; gap:8px; }
   label { display:grid; grid-template-columns:96px 1fr; align-items:center; gap:8px; color:var(--muted); }
   button, select, input[type=file], input[type=text] { font:inherit; color:var(--fg); background:#1f1f1f; border:1px solid var(--line); border-radius:8px; padding:8px; }
-  button:focus-visible, select:focus-visible, input:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  input[type=checkbox] { width:20px; height:20px; margin:0; flex:none; accent-color:var(--accent); }
   button.primary { background:var(--accent); color:#000; border-color:var(--accent); font-size:1.1em; padding:12px; }
   button.danger { color:#ff8f8f; }
   h2 { font-size:.8em; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:8px 0 0; display:flex; justify-content:space-between; align-items:center; }
@@ -61,6 +62,7 @@
   #pairbox[hidden] { display:none; }
   #paircode { font:700 16vmin ui-monospace,Menlo,monospace; letter-spacing:.08em; color:var(--accent); }
   #pairmsg { font-size:2.6vmin; color:var(--fg); max-width:80vw; }
+  #pairhint { font-size:2vmin; color:var(--muted); margin:0; }
   #pairinput { text-transform:uppercase; letter-spacing:.2em; font-family:ui-monospace,Menlo,monospace; }
   #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#000c; border:1px solid var(--line); padding:8px 14px; border-radius:20px; color:var(--fg); opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.on { opacity:1; }
@@ -198,8 +200,8 @@
     <small>Back, Esc or a tap brings this menu back. Settings stay in this browser only.</small>
   </div>
 </aside>
-<div id="banner" hidden>Reconnecting… check that Funny Faces is still running on the computer.</div>
-<div id="pairbox" hidden><div id="paircode"></div><p id="pairmsg"></p></div>
+<div id="banner" role="status" aria-live="polite" hidden>Reconnecting… check that Funny Faces is still running on the computer.</div>
+<div id="pairbox" hidden><div id="paircode"></div><p id="pairmsg" aria-live="polite"></p><p id="pairhint">With a TV remote, press Enter or OK to go full screen.</p></div>
 <div id="toast" role="status"></div>
 <script type="module" src="src/app.js"></script>
 </body>
