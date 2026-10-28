@@ -121,13 +121,18 @@ test('with LAN control on: first visitor sets a password, then logs in', async (
   const lan = `192.168.1.9:${port}`, json = { 'content-type': 'application/json' };
   try {
     assert.match((await get(port, '/', { host: lan })).body, /Set a password/);
-    assert.equal((await get(port, '/api/setup', { method: 'POST', host: lan, headers: json, body: JSON.stringify({ password: 'short' }) })).status, 400);
-    const set = await get(port, '/api/setup', { method: 'POST', host: lan, headers: json, body: JSON.stringify({ password: 'long enough pw' }) });
+    const code = app.auth.setupCode;
+    assert.match(code, /^[0-9A-F]{8}$/);
+    assert.match((await get(port, '/', { host: lan })).body, /Setup code/);
+    const setup = (b) => get(port, '/api/setup', { method: 'POST', host: lan, headers: json, body: JSON.stringify(b) });
+    assert.equal((await setup({ password: 'long enough pw', code: 'WRONG123' })).status, 403);     // a neighbour cannot claim it
+    assert.equal((await setup({ password: 'short', code })).status, 400);
+    const set = await setup({ password: 'long enough pw', code: code.toLowerCase() });
     assert.equal(set.status, 200);
     const cookie = set.headers['set-cookie'][0].split(';')[0];
     assert.match((await get(port, '/', { host: lan })).body, /Log in/);
     assert.match((await get(port, '/', { host: lan, headers: { cookie } })).body, /<title>app/);
-    assert.equal((await get(port, '/api/setup', { method: 'POST', host: lan, headers: json, body: JSON.stringify({ password: 'another pass' }) })).status, 409);
+    assert.equal((await setup({ password: 'another pass', code })).status, 409);
     assert.equal((await get(port, '/api/login', { method: 'POST', host: lan, headers: json, body: JSON.stringify({ password: 'wrong wrong' }) })).status, 401);
     assert.equal((await get(port, '/api/login', { method: 'POST', host: lan, headers: json, body: JSON.stringify({ password: 'long enough pw' }) })).status, 200);
   } finally { await app.close(); }
@@ -150,5 +155,40 @@ test('end to end over real WebSockets: a screen shows a code, the control page p
     admin.send(JSON.stringify({ action: 'm', v: [9, 8, 7], n: 1 }));
     assert.deepEqual((await got).v, [9, 8, 7]);
     screen.close(); admin.close();
+  } finally { await app.close(); }
+});
+
+test('a code typed the way the TV shows it (with a space or dash) works', () => {
+  const r = new Relay();
+  const screen = fakeConn(r, 's', false), admin = fakeConn(r, 'a', true);
+  r.handle('s', { action: 'register' });
+  const c = screen[0].code;
+  r.handle('a', { action: 'pair', code: ` ${c.slice(0, 3).toLowerCase()} - ${c.slice(3)} ` });
+  assert.equal(admin.at(-1).type, 'paired');
+});
+
+test('wrong guesses are counted per address, so reconnecting does not reset them', () => {
+  const r = new Relay();
+  for (let i = 0; i < 10; i++) {
+    const id = 'c' + i, got = fakeConn(r, id, true);
+    r.connect(id, (o) => got.push(o), true, '10.0.0.7');
+    r.handle(id, { action: 'pair', code: 'AAAAAA' });
+  }
+  const last = [];
+  r.connect('z', (o) => last.push(o), true, '10.0.0.7');
+  r.handle('z', { action: 'pair', code: 'AAAAAA' });
+  assert.equal(last.at(-1).error, 'too_many_attempts');
+  const other = [];
+  r.connect('y', (o) => other.push(o), true, '10.0.0.8');
+  r.handle('y', { action: 'pair', code: 'AAAAAA' });
+  assert.equal(other.at(-1).error, 'bad_code');
+});
+
+test('starting on a taken port fails cleanly', async () => {
+  const { app, port } = await boot();
+  try {
+    const second = createApp({ port, host: '127.0.0.1', dataDir: join(tmpdir(), 'ff-x'), distDir: '.' });
+    await assert.rejects(second.listen(), (e) => e.code === 'EADDRINUSE');
+    await second.close().catch(() => {});
   } finally { await app.close(); }
 });

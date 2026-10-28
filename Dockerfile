@@ -6,7 +6,7 @@ COPY server ./server
 COPY scripts ./scripts
 COPY index.html ./
 RUN node scripts/build.mjs > /dev/null
-ENV HOST=0.0.0.0 PORT=8765 FACES_DATA=/data FACES_LAN_CONTROL=1
+ENV FACES_NO_BUILD=1 HOST=0.0.0.0 PORT=8765 FACES_DATA=/data FACES_LAN_CONTROL=1
 VOLUME /data
 EXPOSE 8765
 USER node

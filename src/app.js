@@ -156,7 +156,7 @@ function startAdminLink() {
 }
 
 function pairWith(code) {
-  const c = code.trim().toUpperCase();
+  const c = code.toUpperCase().replace(/[^A-Z0-9]/g, '');   // the TV shows "ABC DEF"; spaces and dashes are fine
   if (c.length !== 6) { sayScreens('The code has 6 letters and numbers.'); return; }
   pendingCode = c; sayScreens('Connecting…');
   if (!link) startAdminLink();
