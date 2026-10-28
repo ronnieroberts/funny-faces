@@ -190,3 +190,7 @@ npm test
 ## Rules
 
 Never commit credentials, tokens, IP addresses or private hostnames. Use placeholders in docs (192.168.1.23 above is an example).
+
+## Licence
+
+MIT. See `LICENSE`. The downloads bundle Node.js, which has its own licence.
