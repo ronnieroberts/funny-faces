@@ -8,6 +8,7 @@ import { loadPacks, savePacks, parsePack, addPack, removePack, allFaces, findFac
 import { drag, scale, nudge } from './layout.js';
 import { Link, loadConfig } from './relay.js';
 import { buildState, parseState, packMouth, unpackMouth, isNewer, changed } from './share.js';
+import { captureTabAudio, tabAudioSupported, TAB_AUDIO_MESSAGES } from './tabaudio.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('stage'), ctx = canvas.getContext('2d');
@@ -296,13 +297,14 @@ function showTab(name) {
 for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
 
 // ---------------------------------------------------------------- audio
-let audio = null, source = null, live = null, stream = null, el = null;
+let audio = null, source = null, live = null, stream = null, el = null, tabStop = null;
 const mouths = new Mouths();
 function ensureAudio() {
   if (!audio) { audio = new AudioContext(); live = source = new LiveSource(audio); }
   if (audio.state === 'suspended') audio.resume();
 }
 function stopSources() {
+  if (tabStop) { tabStop(); tabStop = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (el) { el.pause(); el = null; }
   if (live) { try { live.analyser.disconnect(); } catch { /* not connected */ } source = live; }
@@ -354,6 +356,21 @@ async function useMic() {
   } catch (e) { say('Could not use the microphone: ' + (e.name || 'error')); throw e; }
 }
 $('mic').addEventListener('click', () => useMic().catch(() => {}));
+// Sound from another tab: the tab plays its own sound, so it feeds the analyser only, never the speakers.
+async function useTab() {
+  try {
+    ensureAudio(); stopSources();
+    const cap = await captureTabAudio({ mediaDevices: navigator.mediaDevices, MediaStream }, {
+      onEnded: () => { stopSources(); say('Tab sharing stopped'); },
+    });
+    tabStop = cap.stop; stream = cap.stream;
+    live.connect(audio.createMediaStreamSource(stream));
+    $('firsthint').hidden = true;
+    say('Listening to the shared tab');
+  } catch (e) { say(e.code ? TAB_AUDIO_MESSAGES[e.code] : 'Could not capture the tab sound'); throw e; }
+}
+if (tabAudioSupported()) $('tab').addEventListener('click', () => useTab().catch(() => {}));
+else { $('tab').hidden = true; $('tabnote').hidden = false; }
 $('file').addEventListener('change', () => {
   const f = $('file').files[0];
   if (!f) return;

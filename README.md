@@ -101,6 +101,15 @@ server (microphone only, no extra screens).
 - A chosen audio file is analysed once in the browser and plays with its mouth track. A prepared song has no separate
   voice ranges, so it plays all together (turns and random still work).
 
+## Sound from another tab
+
+To make the faces talk along with Apple Music, YouTube or any other web page, press **Use another tab's sound** on the
+Play tab, choose **Chrome Tab**, pick the tab and tick **Share tab audio**. The tab keeps playing out loud; press
+Stop sharing in the browser to end it. This works in Chrome or Edge on a computer (on a Mac only Chrome tabs can share
+sound; on Windows a whole screen can too). TV browsers cannot do it: capture on the computer and let the TV screen
+follow. Tip: play the music in a Chrome tab and use Voice focus / Voice bands on the Advanced and Pumpkins tabs so
+each pumpkin follows its own part.
+
 ## Kiosk and Fire TV use
 
 For a screen that only shows the faces, open `/screen` on it and pair it with the code (see above). It goes full screen
