@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A screen that loses its connection now frowns (the mouth closes and the face droops) until it reconnects.
+- The cat face now looks like a cat.
 
 ## 1.0.2
 
