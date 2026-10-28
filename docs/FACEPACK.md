@@ -67,3 +67,92 @@ There are two ways to use a pack:
 
 Each `id` must be unique. If a folder pack and a stored pack share an `id`, the folder pack is shown; the built-in pack's `id`
 is reserved. Each pumpkin picks its face from the **Face** list.
+
+## Design guidance
+
+Faces are drawn on a 100 x 100 square, and the same face is shown on every screen, so a few habits make the difference between a face that looks alive and one that looks broken.
+
+**Movement.** The mouth is the part that moves most: it blends between `top` (closed) and `open` (fully open) many times a second while the voice is going.
+- Keep the open mouth's lowest point within about 35 units of the closed edge (the starter pack uses 14 to 32). More than that and the jaw looks like it falls off.
+- Keep the whole face inside roughly x 8 to 92 and y 6 to 94. The app accepts -20 to 120, but anything outside the square is clipped or runs into the next pumpkin.
+- `react.dy` moves a shape up or down as the voice gets louder. Use 2 to 5 for eyebrows. The limit is 20, but above about 6 the brows bounce and are tiring to watch for a whole song.
+- Keep `widthRange` between about 0.7 and 1.2. The limit is 0.3 to 2, but a mouth that swings from narrow to very wide on every syllable looks like a flapping puppet.
+- A `thick` of 1 to 2.5 reads well from across a room. Thin lines vanish on a projector.
+- Use `blink: true` on eyes only. Everything else should stay still: a face with many things moving at once is hard to read.
+
+**Shapes.** Use few points: 3 to 14 for most shapes, up to about 20 for a mouth (zig-zag teeth need matching points in `top` and `open`). Use `smooth: true` on round shapes instead of adding points, and `mirror: true` so both eyes match. Keep it simple: it is seen from a distance.
+
+**Fire is expensive.** A `flame` on a shape or `fire: true` on a mouth is redrawn many times a second. Use it on at most 3 or 4 layers per face. Eight fire faces on one projector can make the picture stutter on a weak computer; fewer flames helps more than anything else.
+
+**Colour.** A pack has no colours. The person running the show picks the colour on the Look tab, and each pumpkin can have its own. Design in one colour: shapes lit on a dark background.
+
+**Do not copy characters.** Do not make faces of cartoon, film or game characters or brand mascots. Faces from your own idea are fine to share; set `license` to say how others may use them.
+
+**Test it small.** Add the pack, put the face on a pumpkin, play a song and watch for a minute. If the mouth looks wrong, reduce the open depth; if the whole face jumps, reduce `react.dy`.
+
+## Making a pack with an AI assistant
+
+Any chat assistant that can write JSON can draft a pack. Copy the prompt below, change the line that says what you want, and paste it in. Save the answer as `something.json`, drop it in the packs folder (see the README, "Adding your own faces"), and reload the page. If the page says the file was skipped, paste that message back to the assistant and ask it to fix the file.
+
+Assistants get coordinates wrong now and then, so expect two or three rounds. Ask for changes in plain words: "bigger eyes, fewer teeth, make the mouth less tall".
+
+```text
+Write a "face pack" file for an app called Funny Faces. It is one JSON file. Reply with only the JSON in one code
+block, then a short list of any choices you made.
+
+WHAT I WANT: <describe the characters, for example "three monsters: a one-eyed blob, a vampire with fangs, and a
+sleepy ghost">. Do not copy any existing cartoon, film, game or brand character.
+
+THE FORMAT
+{
+  "format": "pumpkin-face-pack",
+  "version": 1,
+  "id": "short-lowercase-id",
+  "name": "Pack name",
+  "author": "My name",
+  "license": "Personal use",
+  "faces": [
+    { "id": "face-id", "name": "Face name", "layers": [ ...layers... ] }
+  ]
+}
+
+Coordinates are on a 100 x 100 square. x runs left to right, y runs top to bottom. Keep every point inside x 8 to 92
+and y 6 to 94. Faces are drawn as lit shapes on a dark background in one colour, so there are no colours in the file.
+
+TWO KINDS OF LAYER
+1. A filled shape:
+   { "kind": "shape", "points": [[x,y],[x,y],[x,y]], "mirror": true, "blink": true, "smooth": false,
+     "react": { "dy": -3 } }
+   - "points": at least 3 points, normally 3 to 14, forming a closed polygon.
+   - "mirror": true also draws a copy flipped around x = 50, so draw only the LEFT half (x below 50) of eyes, brows
+     and ears.
+   - "blink": true squashes it when the face blinks. Use it on eyes only.
+   - "smooth": true rounds the corners into curves. Use it for round shapes instead of adding many points.
+   - "react": { "dy": n } moves the shape up or down as the voice gets louder. Use -2 to -5 for eyebrows (negative
+     is up) and leave it out for everything else.
+   - optional "flame": true, or { "height": 12, "intensity": 1 }, makes flames burn above the shape. Use it on at
+     most 3 layers per face because it is slow to draw.
+2. A mouth, exactly one per face, listed last:
+   { "kind": "mouth", "top": [[x,y], ...], "open": [[x,y], ...], "thick": 1.6, "widthRange": [0.88, 1.08] }
+   - "top" is the mouth's edge when closed, listed left to right. Alternating y values a few units apart make teeth.
+   - "open" is the same edge fully open, with EXACTLY the same number of points as "top", the same x values, and
+     larger y values (the lower lip). The app blends between the two as the person talks.
+   - Keep the open edge no more than 35 units below the closed edge. 12 to 30 is good.
+   - "thick" is the line thickness when closed (1 to 2.5). "widthRange" is the width scale for [low sounds, high
+     sounds]; stay between 0.7 and 1.2.
+   - optional "fire": true fills the mouth with fire. It is slow to draw, so use it rarely.
+
+LIMITS (the app rejects a file that breaks them)
+- At most 50 faces per pack, 40 layers per face, 200 points per shape. Stay far below that: 4 to 8 layers a face.
+- Every face needs at least one layer. A shape needs at least 3 points. A mouth's "top" and "open" need at least 2
+  points each and must be the same length.
+- Use only the fields listed here. Leave out anything you are not sure about.
+- Give every face in the pack a different "id" (letters, digits and dashes only).
+
+DESIGN RULES
+- The face is seen from across a room on a projector: bold, simple shapes, big eyes, a big mouth.
+- Only the mouth and eyebrows should move much. Keep everything else still.
+- Make the faces clearly different from each other (eye shape, mouth shape, teeth), not one face with tiny tweaks.
+- Check your own work before replying: matching point counts in each mouth, no point outside the safe area, and
+  valid JSON (no comments, no trailing commas).
+```
