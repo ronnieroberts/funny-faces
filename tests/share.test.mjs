@@ -11,6 +11,12 @@ const faceFor = () => face;
 const Q = [[0.1, 0.2], [0.4, 0.25], [0.45, 0.6], [0.05, 0.55]];
 const three = { ...DEFAULTS, pumpkins: [{ ...DEFAULTS.pumpkins[0] }, { ...DEFAULTS.pumpkins[0], quad: Q, color: '#00ff00' }, { ...DEFAULTS.pumpkins[0], enabled: false }] };
 
+test('a mirrored face is sent to the screens as mirrored', () => {
+  const m = { ...three, pumpkins: [{ ...three.pumpkins[0], mirror: true }, { ...three.pumpkins[1] }] };
+  const s = parseState(JSON.parse(JSON.stringify(buildState(m, faceFor))));
+  assert.deepEqual(s.pumpkins.map((p) => p.mirror), [true, false]);
+});
+
 test('state survives the trip and is re-validated', () => {
   const s = parseState(JSON.parse(JSON.stringify(buildState({ ...three, color: '#00ff00', size: 1.2 }, faceFor))));
   assert.equal(s.color, '#00ff00');

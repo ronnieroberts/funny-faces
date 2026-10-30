@@ -103,7 +103,9 @@ server (microphone only, no extra screens).
 ## Faces, voices and advanced settings
 
 - **Up to 8 faces** at once (Faces tab). Each has its own face, can be switched off, and can be nudged, resized and
-  given its own colour (sections *Look of this face* and *Position and size*).
+  given its own colour (sections *Look of this face* and *Position and size*). **Mirror this face** makes a face look the
+  other way, so two faces can look at each other. It is not the same as the screen's *Mirror* (rear projection), which
+  flips the whole picture.
 - **Who talks** (also on the Faces tab):
   - *All together, in sync*: every face moves with the sound.
   - *Each face listens to its own voice range*: bass, baritone, tenor, alto, soprano, treble ("s" sounds) or the full
