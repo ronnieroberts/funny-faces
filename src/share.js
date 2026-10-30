@@ -20,7 +20,7 @@ export function parseState(obj) {
   try {
     const faces = Object.create(null);   // no inherited keys: a face called 'toString' must not match
     for (const [key, f] of Object.entries(obj.faces).slice(0, MAX_PUMPKINS)) {
-      faces[key] = validatePack({ format: FORMAT, version: 2, id: 'shared', name: 'Shared', faces: [f] }).faces[0];
+      faces[key] = validatePack({ format: FORMAT, version: 1, id: 'shared', name: 'Shared', faces: [f] }).faces[0];
     }
     const s = sanitize({ color: obj.color, glow: obj.glow, x: obj.x, y: obj.y, size: obj.size, adv: { idleDim: obj.idleDim },
       pumpkins: obj.pumpkins.slice(0, MAX_PUMPKINS).map((p) => ({ ...p, voice: 'full', enabled: true })) });
