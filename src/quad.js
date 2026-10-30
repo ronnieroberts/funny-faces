@@ -265,3 +265,6 @@ export function screenSize(q, w, h) {
   const c = q.map(([x, y]) => [x * w, y * h]);
   return Math.max(...c.map((p, i) => len(sub(c[(i + 1) % 4], p))));
 }
+
+/** The same place with left and right swapped (corners TL, TR, BR, BL become TR, TL, BL, BR): drawing a picture on it flips the picture, not the place. */
+export const mirrorQuad = (q) => [q[1], q[0], q[3], q[2]];

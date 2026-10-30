@@ -9,7 +9,7 @@ export function buildState(settings, faceFor, epoch = 0) {
   for (const p of on) if (!faces[p.face]) faces[p.face] = faceFor(p.face);
   return {
     epoch, color: settings.color, glow: settings.glow, x: settings.x, y: settings.y, size: settings.size, idleDim: settings.adv.idleDim,
-    pumpkins: on.map((p) => ({ face: p.face, quad: p.quad, color: p.color })), faces,
+    pumpkins: on.map((p) => ({ face: p.face, quad: p.quad, color: p.color, mirror: p.mirror === true })), faces,
     screenOutput: sanitizeScreenOutput(settings.screenOutput),   // mirror / flip for every screen; this page's own `output` is never sent
   };
 }
@@ -24,7 +24,7 @@ export function parseState(obj) {
     }
     const s = sanitize({ color: obj.color, glow: obj.glow, x: obj.x, y: obj.y, size: obj.size, adv: { idleDim: obj.idleDim },
       pumpkins: obj.pumpkins.slice(0, MAX_PUMPKINS).map((p) => ({ ...p, voice: 'full', enabled: true })) });
-    const pumpkins = s.pumpkins.map((p, i) => ({ face: Object.hasOwn(faces, obj.pumpkins[i].face) ? faces[obj.pumpkins[i].face] : undefined, quad: p.quad, color: p.color }));   // quad: re-validated, or the default place if it was bad
+    const pumpkins = s.pumpkins.map((p, i) => ({ face: Object.hasOwn(faces, obj.pumpkins[i].face) ? faces[obj.pumpkins[i].face] : undefined, quad: p.quad, color: p.color, mirror: p.mirror }));   // quad: re-validated, or the default place if it was bad
     if (!pumpkins.length || pumpkins.some((p) => !p.face)) return null;
     const epoch = Number.isInteger(obj.epoch) && obj.epoch >= 0 && obj.epoch < 2 ** 31 ? obj.epoch : 0;
     return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins, screenOutput: sanitizeScreenOutput(obj.screenOutput) };

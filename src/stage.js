@@ -2,7 +2,7 @@
 // Each face is drawn flat into a small tile, then the GPU warps the tile onto the pumpkin's quad (see glstage.js).
 import { drawFace } from './facepack.js';
 import { GLStage } from './glstage.js';
-import { screenSize } from './quad.js';
+import { screenSize, mirrorQuad } from './quad.js';
 import { LEVELS, Governor, tileSize, tileCap, tileKey, keyChanged, flameTime } from './quality.js';
 
 const flameFaces = new WeakMap();
@@ -79,7 +79,8 @@ export class Stage {
         drawFace(tile.getContext('2d'), p.face, px, st);
       }
       const it = items[i] || (items[i] = {});
-      it.key = i; it.canvas = tile; it.quad = p.quad; it.dirty = dirty || !L.upload;
+      it.key = i; it.canvas = tile; it.dirty = dirty || !L.upload;
+      if (it.src !== p.quad || it.mir !== !!p.mirror) { it.src = p.quad; it.mir = !!p.mirror; it.quad = it.mir ? mirrorQuad(p.quad) : p.quad; }   // mirrored: swap left and right corners, so the picture flips and the place stays
     }
     this.tiles.length = this.state.length = items.length = n;
     const T1 = performance.now();

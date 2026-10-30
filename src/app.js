@@ -240,7 +240,11 @@ wake.onchange = (s) => {
 };
 function setPlaying(on) { playingNow = on; refreshAwake(); }
 for (const el of document.querySelectorAll('[data-path^="output."]')) {
-  el.addEventListener('input', () => { showOutput(); refreshAwake(); });
+  el.addEventListener('input', () => {
+    const key = el.dataset.path.slice('output.'.length);
+    if (!screenMode && (key === 'mirror' || key === 'flip')) { settings.screenOutput[key] = el.checked; syncControls(); persist(); }   // the control page's own mirror and flip go to the screens too
+    showOutput(); refreshAwake();
+  });
 }
 function screenKey(e) {                                  // on a display: M mirrors, F flips
   const k = e.key.toLowerCase();
@@ -664,7 +668,7 @@ function draw(now) {
     if (display) display.sad = sadAmt < 0.01 ? 0 : sadAmt;
     list = display && display.pumpkins; look = display;
   } else {
-    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
+    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color, mirror: p.mirror }));
     look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;
     meterFill.style.width = Math.round(Math.min(1, Math.max(0, ...ms.map((m) => m.energy)) * 1.4) * 100) + '%';
   }
