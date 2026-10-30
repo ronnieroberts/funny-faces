@@ -87,6 +87,43 @@ function points(arr, min = 2) {
   });
 }
 
+/**
+ * SVG path data (version 2 packs): M L H V C S Q T Z, upper or lower case, in the 100 x 100 square. Arcs are not supported.
+ * Returns absolute operations: ['M',x,y], ['L',x,y], ['C',x1,y1,x2,y2,x,y], ['Q',x1,y1,x,y], ['Z']. Anything else throws.
+ */
+export function parsePath(d) {
+  if (typeof d !== 'string' || !d.trim() || d.length > 24000) throw new Error('bad path');
+  const re = /[MmLlHhVvCcSsQqTtZzAa]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g, tok = d.match(re) || [];
+  if (d.replace(re, '').replace(/[\s,]/g, '')) throw new Error('bad path');
+  const c = (v) => num(v, -20, 120), ops = [];
+  let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, lcx = 0, lcy = 0, last = '';
+  const isCmd = (t) => /^[A-Za-z]$/.test(t), take = (n) => {
+    const out = [];
+    for (let k = 0; k < n; k++) { const t = tok[i++]; if (t === undefined || isCmd(t)) throw new Error('bad path'); out.push(+t); }
+    return out;
+  };
+  while (i < tok.length) {
+    if (isCmd(tok[i])) cmd = tok[i++]; else if (!cmd || cmd === 'Z' || cmd === 'z') throw new Error('bad path');
+    const rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase(), ox = rel ? x : 0, oy = rel ? y : 0;
+    if (ops.length >= 800) throw new Error('path too long');
+    if (C === 'A') throw new Error('Arcs are not supported in a path');
+    if (C === 'Z') { ops.push(['Z']); x = sx; y = sy; last = 'Z'; continue; }
+    if (C === 'M') { const [a, b] = take(2); x = c(ox + a); y = c(oy + b); sx = x; sy = y; ops.push(['M', x, y]); cmd = rel ? 'l' : 'L'; last = 'M'; continue; }
+    if (C === 'L') { const [a, b] = take(2); x = c(ox + a); y = c(oy + b); ops.push(['L', x, y]); last = 'L'; continue; }
+    if (C === 'H') { const [a] = take(1); x = c(ox + a); ops.push(['L', x, y]); last = 'L'; continue; }
+    if (C === 'V') { const [a] = take(1); y = c(oy + a); ops.push(['L', x, y]); last = 'L'; continue; }
+    if (C === 'C') { const [a, b, e, f, g, h] = take(6); const x1 = c(ox + a), y1 = c(oy + b), x2 = c(ox + e), y2 = c(oy + f); x = c(ox + g); y = c(oy + h); ops.push(['C', x1, y1, x2, y2, x, y]); lcx = x2; lcy = y2; last = 'C'; continue; }
+    if (C === 'S') { const [e, f, g, h] = take(4); const x1 = last === 'C' ? 2 * x - lcx : x, y1 = last === 'C' ? 2 * y - lcy : y, x2 = c(ox + e), y2 = c(oy + f); x = c(ox + g); y = c(oy + h); ops.push(['C', c(x1), c(y1), x2, y2, x, y]); lcx = x2; lcy = y2; last = 'C'; continue; }
+    if (C === 'Q') { const [a, b, g, h] = take(4); const x1 = c(ox + a), y1 = c(oy + b); x = c(ox + g); y = c(oy + h); ops.push(['Q', x1, y1, x, y]); lcx = x1; lcy = y1; last = 'Q'; continue; }
+    if (C === 'T') { const [g, h] = take(2); const x1 = last === 'Q' ? c(2 * x - lcx) : x, y1 = last === 'Q' ? c(2 * y - lcy) : y; x = c(ox + g); y = c(oy + h); ops.push(['Q', x1, y1, x, y]); lcx = x1; lcy = y1; last = 'Q'; continue; }
+  }
+  if (!ops.length || ops[0][0] !== 'M') throw new Error('bad path');
+  return ops;
+}
+const round2 = (v) => Math.round(v * 100) / 100;
+const pathString = (ops) => ops.map((o) => o[0] + o.slice(1).map(round2).join(' ')).join(' ');
+const opPoints = (ops) => ops.flatMap((o) => { const p = []; for (let k = 1; k < o.length; k += 2) p.push([o[k], o[k + 1]]); return p; });
+
 // A shape can burn: `flame: true` or `flame: {height, intensity}` draws flickering flames above it.
 function flameSpec(v) {
   if (v === true) return { height: 12, intensity: 1 };
@@ -95,7 +132,7 @@ function flameSpec(v) {
 }
 
 export function validatePack(obj) {
-  if (!obj || obj.format !== FORMAT || obj.version !== 1) throw new Error('Not a Funny Faces face pack (version 1)');
+  if (!obj || obj.format !== FORMAT || (obj.version !== 1 && obj.version !== 2)) throw new Error('Not a Funny Faces face pack (version 1 or 2)');
   if (!Array.isArray(obj.faces) || !obj.faces.length || obj.faces.length > LIMITS.faces) throw new Error('Pack has no faces or too many');
   const faces = obj.faces.map((f) => {
     if (!Array.isArray(f.layers) || !f.layers.length || f.layers.length > LIMITS.layers) throw new Error('Bad layer list');
@@ -115,11 +152,19 @@ export function validatePack(obj) {
         if (fl) out.flame = fl;
         return out;
       }
+      if (l.kind === 'path') {
+        if (obj.version !== 2) throw new Error('Path layers need a version 2 pack');
+        const ops = parsePath(l.d), stroke = num(l.stroke, 0, 10, 1.2), fill = !!l.fill;
+        if (!fill && stroke <= 0) throw new Error('A path needs a stroke or a fill');
+        const ys = opPoints(ops).map((p) => p[1]);
+        return { kind: 'path', d: pathString(ops), ops, stroke, fill, opacity: num(l.opacity, 0.1, 1, 1), mirror: !!l.mirror, blink: !!l.blink,
+                 react: { dy: num(l.react && l.react.dy, -20, 20, 0) }, cy: round2((Math.min(...ys) + Math.max(...ys)) / 2) };
+      }
       throw new Error('Unknown layer kind');
     });
     return { id: slug(f.id), name: str(f.name, 80, 'Face'), layers };
   });
-  return { format: FORMAT, version: 1, id: slug(obj.id), name: str(obj.name, 80, 'Pack'),
+  return { format: FORMAT, version: obj.version, id: slug(obj.id), name: str(obj.name, 80, 'Pack'),
            author: str(obj.author, 80), license: str(obj.license, 200), faces };
 }
 
@@ -277,7 +322,7 @@ export function drawFace(ctx, face, S, st) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, S, S);
   ctx.globalAlpha = clamp01(st.alpha);
-  ctx.fillStyle = ctx.shadowColor = st.color;
+  ctx.fillStyle = ctx.strokeStyle = ctx.shadowColor = st.color;
   const blur = st.shadow === false ? 0 : st.glow * S * 0.035;         // soft halo round plain shapes; flames carry their own glow
   const detail = st.detail || 1;                                      // 1 = every flame tongue, less = fewer (faster)
   ctx.shadowBlur = blur;
@@ -286,7 +331,24 @@ export function drawFace(ctx, face, S, st) {
   const mirrorPts = (pts) => pts.map(([x, y]) => [100 - x, y]).reverse();
   face.layers.forEach((l, li) => {
     ctx.shadowBlur = st.cheapGlow && (l.flame || l.fire) ? 0 : blur;   // a blurred shadow under translucent flames costs most of the drawing time
-    if (l.kind === 'shape') {
+    if (l.kind === 'path') {
+      for (const mir of l.mirror ? [false, true] : [false]) {
+        const sad = st.sad || 0, sy = (l.blink ? 1 - 0.9 * st.blink : 1) * (l.blink ? 1 - 0.15 * sad : 1), dy = l.react.dy * st.energy + (l.blink ? 2.5 * sad : 0);
+        const X = (x) => (mir ? 100 - x : x), Y = (y) => l.cy + (y - l.cy) * sy + dy;
+        ctx.beginPath();
+        for (const o of l.ops) {
+          if (o[0] === 'M') ctx.moveTo(X(o[1]), Y(o[2]));
+          else if (o[0] === 'L') ctx.lineTo(X(o[1]), Y(o[2]));
+          else if (o[0] === 'C') ctx.bezierCurveTo(X(o[1]), Y(o[2]), X(o[3]), Y(o[4]), X(o[5]), Y(o[6]));
+          else if (o[0] === 'Q') ctx.quadraticCurveTo(X(o[1]), Y(o[2]), X(o[3]), Y(o[4]));
+          else ctx.closePath();
+        }
+        ctx.globalAlpha = clamp01(st.alpha) * l.opacity;
+        if (l.fill) ctx.fill();
+        if (l.stroke > 0) { ctx.lineWidth = l.stroke; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
+        ctx.globalAlpha = clamp01(st.alpha);
+      }
+    } else if (l.kind === 'shape') {
       const variants = l.mirror ? [l.points, mirrorPts(l.points)] : [l.points];
       variants.forEach((pts, vi) => {
         let cy = 0;
