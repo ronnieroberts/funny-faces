@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sanitize, load, save, resize, arrange, defaultPumpkins, DEFAULTS } from '../src/settings.js';
-import { isValid, centroid, sizeOf } from '../src/quad.js';
+import { isValid, centroid, sizeOf, mirrorQuad } from '../src/quad.js';
 
 const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
 
@@ -101,4 +101,16 @@ test('a resized list survives a save and load unchanged', () => {
   const st = mem(), list = resize(custom(2), 4);
   save({ ...DEFAULTS, pumpkins: list }, st);
   assert.deepEqual(load(st).pumpkins.map((p) => p.quad), list.map((p) => p.quad));
+});
+
+test('a face can be mirrored, and only a real true counts', () => {
+  const s = sanitize({ pumpkins: [{ mirror: true }, { mirror: 'yes' }, {}] });
+  assert.deepEqual(s.pumpkins.map((p) => p.mirror), [true, false, false]);
+  assert.equal(load(Object.assign(new Map(), { getItem: () => JSON.stringify(s) })).pumpkins[0].mirror, true);
+});
+
+test('mirroring a quad swaps left and right and is its own inverse', () => {
+  const q = [[0.1, 0.2], [0.4, 0.25], [0.45, 0.6], [0.05, 0.55]];
+  assert.deepEqual(mirrorQuad(q), [[0.4, 0.25], [0.1, 0.2], [0.05, 0.55], [0.45, 0.6]]);
+  assert.deepEqual(mirrorQuad(mirrorQuad(q)), q);
 });

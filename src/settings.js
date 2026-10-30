@@ -17,7 +17,7 @@ const GROUP = { x: 0, y: 0, size: 0.8 };
 
 /** quad: corners TL, TR, BR, BL as fractions of the stage (see quad.js). */
 export function newPumpkin(i = 0, A = DEFAULT_ASPECT) {
-  return { face: DEFAULT_FACES[i % 8], voice: 'full', trim: 0, enabled: true, quad: gridQuads(1, A, GROUP)[0], color: '' };
+  return { face: DEFAULT_FACES[i % 8], voice: 'full', trim: 0, enabled: true, quad: gridQuads(1, A, GROUP)[0], color: '', mirror: false };
 }
 export const defaultPumpkins = (n, A = DEFAULT_ASPECT) => {
   const quads = gridQuads(n, A, GROUP);
@@ -47,7 +47,7 @@ function pumpkin(o, i, quad) {
     face: typeof p.face === 'string' && p.face.length <= 130 ? p.face : d.face,
     voice: Object.hasOwn(VOICE_NAMES, p.voice) ? p.voice : d.voice,
     trim: num(p.trim, -20, 20, 0), enabled: p.enabled !== false,
-    quad, color: color(p.color),
+    quad, color: color(p.color), mirror: p.mirror === true,   // true: this face looks the other way (left and right swapped)
   };
 }
 

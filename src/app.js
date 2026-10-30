@@ -668,7 +668,7 @@ function draw(now) {
     if (display) display.sad = sadAmt < 0.01 ? 0 : sadAmt;
     list = display && display.pumpkins; look = display;
   } else {
-    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color }));
+    list = enabledPumpkins().map((p) => ({ face: findFace(faces, p.face).face, quad: p.quad, color: p.color, mirror: p.mirror }));
     look = { ...settings, idleDim: settings.adv.idleDim }; ms = lastMouths;
     meterFill.style.width = Math.round(Math.min(1, Math.max(0, ...ms.map((m) => m.energy)) * 1.4) * 100) + '%';
   }
