@@ -220,9 +220,16 @@ $('resetskew').addEventListener('click', () => {
 const screenMode = params.has('screen');                // this page is a display, not the main screen
 if (screenMode) document.body.classList.add('screen');
 
+let display = null;                                     // on a screen: the look the control page last sent
 // ---- output: mirror, flip and keep-awake belong to this device (a screen keeps its own, from ?mirror=1&flip=1&awake=0)
 const output = screenMode ? loadScreenOutput(params) : settings.output;
-applyOutput(output, document.body);
+// A screen shows its own options plus whatever the control page asks for every screen (the Screens tab).
+const shownOutput = () => {
+  const all = (screenMode && display && display.screenOutput) || {};
+  return { ...output, mirror: !!(output.mirror || all.mirror), flip: !!(output.flip || all.flip) };
+};
+const showOutput = () => applyOutput(shownOutput(), document.body);
+showOutput();
 const wake = createWakeLock(navigator, document);
 let playingNow = false;
 function refreshAwake() { return playingNow && output.keepAwake ? wake.acquire() : wake.release(); }
@@ -233,15 +240,15 @@ wake.onchange = (s) => {
 };
 function setPlaying(on) { playingNow = on; refreshAwake(); }
 for (const el of document.querySelectorAll('[data-path^="output."]')) {
-  el.addEventListener('input', () => { applyOutput(output, document.body); refreshAwake(); });
+  el.addEventListener('input', () => { showOutput(); refreshAwake(); });
 }
 function screenKey(e) {                                  // on a display: M mirrors, F flips
   const k = e.key.toLowerCase();
   if (e.ctrlKey || e.metaKey || e.altKey || (k !== 'm' && k !== 'f')) return false;
   const name = k === 'm' ? 'mirror' : 'flip';
   output[name] = !output[name];
-  applyOutput(output, document.body); saveScreenOutput(output);
-  toast(`${name === 'mirror' ? 'Mirror' : 'Flip'} ${output[name] ? 'on' : 'off'}`);
+  saveScreenOutput(output); showOutput();
+  toast(`${name === 'mirror' ? 'Mirror' : 'Flip'} ${shownOutput()[name] ? 'on' : 'off'}${shownOutput()[name] && !output[name] ? ' (set on the control page)' : ''}`);
   return true;
 }
 addEventListener('pagehide', () => { wake.release(); });
@@ -309,7 +316,7 @@ $('endshare').addEventListener('click', () => {
 
 // display side
 let bannerTimer = 0, linkLost = false, sadAmt = 0;    // linkLost: the screen cannot reach the main screen, so its face frowns
-let display = null, curEpoch = -1, lastState = -1;
+let curEpoch = -1, lastState = -1;
 const follow = createFollow();                        // the mouths a screen shows: latest frame, eased, closed when the controller is gone or silent
 function showPairBox(code, msg) {
   $('pairbox').hidden = false;
@@ -341,13 +348,13 @@ function startDisplayLink() {
         if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; follow.reset(); }
         if (!isNewer(m.n, lastState)) return;
         if (Number.isInteger(m.n)) lastState = m.n;
-        display = st; $('pairbox').hidden = true;
+        display = st; $('pairbox').hidden = true; showOutput();
       } else if (m.type === 'admin_gone') {
         follow.adminGone();
       } else if (m.type === 'admin_back') {
         follow.adminBack();
       } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
-        mem.del(SCREEN_KEY); display = null; link.send({ action: 'register' });
+        mem.del(SCREEN_KEY); display = null; showOutput(); link.send({ action: 'register' });
       }
     },
     close() {

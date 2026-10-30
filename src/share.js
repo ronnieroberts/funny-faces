@@ -1,6 +1,6 @@
 // What the main screen shares with display screens: the pumpkins and look (rarely) and the mouths (often).
 import { validatePack, FORMAT } from './facepack.js';
-import { sanitize, MAX_PUMPKINS } from './settings.js';
+import { sanitize, sanitizeScreenOutput, MAX_PUMPKINS } from './settings.js';
 
 /** epoch is a random number picked each time the main screen page loads; it tells screens to forget old counters.
  *  faceFor(key) gives the face object for a pumpkin's face key. Only the enabled pumpkins are sent. */
@@ -10,6 +10,7 @@ export function buildState(settings, faceFor, epoch = 0) {
   return {
     epoch, color: settings.color, glow: settings.glow, x: settings.x, y: settings.y, size: settings.size, idleDim: settings.adv.idleDim,
     pumpkins: on.map((p) => ({ face: p.face, quad: p.quad, color: p.color })), faces,
+    screenOutput: sanitizeScreenOutput(settings.screenOutput),   // mirror / flip for every screen; this page's own `output` is never sent
   };
 }
 
@@ -26,7 +27,7 @@ export function parseState(obj) {
     const pumpkins = s.pumpkins.map((p, i) => ({ face: Object.hasOwn(faces, obj.pumpkins[i].face) ? faces[obj.pumpkins[i].face] : undefined, quad: p.quad, color: p.color }));   // quad: re-validated, or the default place if it was bad
     if (!pumpkins.length || pumpkins.some((p) => !p.face)) return null;
     const epoch = Number.isInteger(obj.epoch) && obj.epoch >= 0 && obj.epoch < 2 ** 31 ? obj.epoch : 0;
-    return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins };
+    return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins, screenOutput: sanitizeScreenOutput(obj.screenOutput) };
   } catch { return null; }
 }
 

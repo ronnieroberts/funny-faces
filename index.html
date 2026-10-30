@@ -236,7 +236,7 @@
     <label class="check"><input type="checkbox" data-path="output.flip"> Flip upside down</label>
     <label class="check"><input type="checkbox" data-path="output.keepAwake"> Keep the screen awake</label>
     <small id="awakestatus" role="status"></small>
-    <small>These apply to this page only. A TV or projector set up on the Screens tab has its own (keys M and F on that screen).</small>
+    <small>These apply to this page only. To mirror or flip the other screens, use the Screens tab.</small>
   </section>
 
   <section class="pane" data-pane="advanced">
@@ -269,6 +269,10 @@
       <button id="pairbtn" type="button" class="primary">Add screen</button>
       <button id="endshare" type="button" class="danger">Stop sharing</button>
       <div id="screenstatus" role="status"></div>
+      <h2>Every connected screen</h2>
+      <label class="check"><input type="checkbox" data-path="screenOutput.mirror"> Mirror all screens (rear projection)</label>
+      <label class="check"><input type="checkbox" data-path="screenOutput.flip"> Flip all screens upside down</label>
+      <small>Changes the screens straight away, on top of each screen's own setting (the address boxes above, or the M and F keys on that screen).</small>
       <small>The other screen shows what you set up here and moves its mouth as you speak into this device's microphone.</small>
     </div>
     <p id="noscreens" hidden>Extra screens need Funny Faces running on a computer (run it, then open the page it prints). This page was opened on its own.</p>

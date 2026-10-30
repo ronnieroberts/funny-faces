@@ -9,7 +9,7 @@ latest mouths, redrawn every frame. Everything is one WebSocket at `/ws` on the 
 | Message | Direction | Encoding | Rate |
 | --- | --- | --- | --- |
 | `register`, `pair`, `admin`, `screen`, `end`, `ping` | page to server | JSON text | rare |
-| `state` (the look: faces, colour, size) | control page to server to screens | JSON text, `{action:'state', state, n}` then `{type:'state', state, n}` | when the look changes |
+| `state` (the look: faces, colour, size, and `screenOutput` {mirror, flip} for every screen) | control page to server to screens | JSON text, `{action:'state', state, n}` then `{type:'state', state, n}` | when the look changes |
 | `code`, `paired`, `ready`, `screens`, `ended`, `error` | server to page | JSON text | rare |
 | `admin_gone`, `admin_back` | server to screens | JSON text | when the control page leaves or returns |
 | **mouths** | control page to server to screens | **binary** | about 15 a second while anything moves |
