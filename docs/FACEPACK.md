@@ -49,20 +49,6 @@ Coordinates are a 100 x 100 square: x runs left to right, y runs top to bottom.
 - `thick`: how thick the mouth is when closed.
 - `widthRange`: width scale for low sounds and high sounds, so "ee" and "oh" differ a little.
 
-**path** (version 2 packs) is a line or curve drawn from SVG path data, so a face can be a real line drawing.
-
-```json
-{ "kind": "path", "d": "M30 40 C34 34 42 33 47 38", "stroke": 1.4, "mirror": true, "blink": false, "react": { "dy": -3 } }
-```
-
-- `"version": 2` must be set on the pack. Version 1 packs keep working unchanged, and a version 2 pack can still mix `shape` and `mouth` layers with `path` layers.
-- `d` is SVG path data in the same 100 x 100 square: `M`, `L`, `H`, `V`, `C`, `S`, `Q`, `T` and `Z`, upper or lower case. Arcs (`A`) are not supported; draw them as curves (`C`). Up to 800 steps and 24,000 characters. Coordinates outside -20 to 120 are clamped.
-- `stroke` is the line width in units (0 to 10, default 1.2, about 1 to 1.5 reads well on a projector). Lines have round ends and joins.
-- `fill: true` also fills the shape (close it with `Z`). A path needs a `stroke` or a `fill`.
-- `opacity` (0.1 to 1) dims a line, for fine detail such as shading or the creases round the eyes.
-- `mirror`, `blink` and `react.dy` work as they do for `shape`.
-- A path drawn in Inkscape, Figma or Illustrator can be pasted in as `d`: use a 100 x 100 canvas, convert arcs and shapes to paths, and set no transforms.
-
 ## Limits
 
 Up to 50 faces per pack, 40 layers per face, 200 points per shape. Files over 2 MB are refused.
