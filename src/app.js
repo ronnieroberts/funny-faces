@@ -240,7 +240,11 @@ wake.onchange = (s) => {
 };
 function setPlaying(on) { playingNow = on; refreshAwake(); }
 for (const el of document.querySelectorAll('[data-path^="output."]')) {
-  el.addEventListener('input', () => { showOutput(); refreshAwake(); });
+  el.addEventListener('input', () => {
+    const key = el.dataset.path.slice('output.'.length);
+    if (!screenMode && (key === 'mirror' || key === 'flip')) { settings.screenOutput[key] = el.checked; syncControls(); persist(); }   // the control page's own mirror and flip go to the screens too
+    showOutput(); refreshAwake();
+  });
 }
 function screenKey(e) {                                  // on a display: M mirrors, F flips
   const k = e.key.toLowerCase();

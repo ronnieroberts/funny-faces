@@ -132,7 +132,7 @@ These options belong to each device, so the projector's own page can have them w
 
 - **Control page:** Look tab, **Output**: *Mirror (rear projection)*, *Flip upside down*, *Keep the screen awake*.
 - **Every connected screen, live:** Screens tab, **Every connected screen**: *Mirror all screens* and *Flip all screens*. They
-  change the screens straight away, on top of whatever each screen already has. The Look tab boxes above change only the page you are on.
+  change the screens straight away, on top of whatever each screen already has. The Look tab *Mirror* and *Flip* boxes change this page and also set these two, so the screens follow; untick them on the Screens tab to keep a screen different.
 - **Display screens (`/screen`):** add them to the address, for example `/screen?mirror=1&flip=1&awake=0`. The Screens
   tab has two boxes that add `mirror=1` and `flip=1` to the address and QR code for you. The screen remembers them,
   and the keys **M** (mirror) and **F** (flip) change them while it is showing.

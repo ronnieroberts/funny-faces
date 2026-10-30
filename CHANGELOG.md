@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mirror and flip on the Look tab now also apply to every connected screen (they set Mirror all screens and Flip all screens). Keep awake still applies to the page you are on.
+
 ## 1.0.4
 
 - Mirror and flip for the other screens: the Screens tab has *Mirror all screens* and *Flip all screens*, which change every connected screen at once. Before, mirroring on the control page (Look tab) only affected that page, and a screen only took mirror and flip from its address.
