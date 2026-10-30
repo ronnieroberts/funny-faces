@@ -35,6 +35,7 @@ export const DEFAULTS = {
   adv: { ...ADV_DEFAULTS },
   pumpkins: [newPumpkin(0)],
   output: { mirror: false, flip: false, keepAwake: true },   // per device: never shared with display screens
+  screenOutput: { mirror: false, flip: false },              // set here, sent to every connected screen (on top of each screen's own)
 };
 
 const num = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
@@ -56,6 +57,12 @@ export function sanitizeOutput(o) {
   return { mirror: v.mirror === true, flip: v.flip === true, keepAwake: v.keepAwake !== false };
 }
 
+/** What this page tells every connected screen: mirror and flip. */
+export function sanitizeScreenOutput(o) {
+  const v = o && typeof o === 'object' ? o : {};
+  return { mirror: v.mirror === true, flip: v.flip === true };
+}
+
 /** A is the stage's width / height; it only matters for pumpkins that have no quad yet. */
 export function sanitize(o, A = DEFAULT_ASPECT) {
   const s = structuredClone(DEFAULTS);
@@ -75,6 +82,7 @@ export function sanitize(o, A = DEFAULT_ASPECT) {
     quality: QUALITY_SETTINGS.includes(a.quality) ? a.quality : 'auto',   // settings saved before this have none: Auto
   };
   s.output = sanitizeOutput(o.output);
+  s.screenOutput = sanitizeScreenOutput(o.screenOutput);
   const list = Array.isArray(o.pumpkins) ? o.pumpkins.slice(0, MAX_PUMPKINS) : [];
   const src = list.length ? list : [{ face: typeof o.face === 'string' ? o.face : undefined }];
   // Settings saved before quads: place them from the group x, y, size and each pumpkin's old dx, dy, scale.
