@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.6
+
 - Editing on the stage shows an alignment grid on the stage and on every connected screen, with a Grid slider in the top right to change the cell size. It goes away when you finish editing.
 
 ## 1.0.5
