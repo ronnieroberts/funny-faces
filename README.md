@@ -148,7 +148,7 @@ These options belong to each device, so the projector's own page can have them w
 
 Each face sits on its own four-corner shape, so you can fit a projected face onto a real pumpkin.
 
-1. Project full screen, then press **E** (or **Edit on the stage** on the Faces tab). The menu hides and handles appear on the picked face.
+1. Project full screen, then press **E** (or **Edit on the stage** on the Faces tab). The menu hides and handles appear on the picked face. An alignment grid also appears on the stage and on every connected screen, with a **Grid** slider in the top right that changes its cell size. The grid goes away when you finish editing.
 2. Drag a face to move it. Drag a corner to skew it (the face tilts in perspective). Drag a side dot to stretch it that way. The top dot rotates, the bottom ring zooms. The mouse wheel zooms the face under the pointer. Two fingers pinch it on a touch screen.
 3. Tab picks the next face, the arrow keys nudge (Shift for bigger steps), + and - zoom, R resets the skew.
 4. Press **E** or **Esc** to finish. M brings the menu back.

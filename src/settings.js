@@ -35,6 +35,7 @@ export const DEFAULTS = {
   adv: { ...ADV_DEFAULTS },
   pumpkins: [newPumpkin(0)],
   output: { mirror: false, flip: false, keepAwake: true },   // per device: never shared with display screens
+  gridSize: 0.1,                                              // the alignment grid shown while editing on the stage: cell size as a fraction of the shorter screen side
   screenOutput: { mirror: false, flip: false },              // set here, sent to every connected screen (on top of each screen's own)
 };
 
@@ -83,6 +84,7 @@ export function sanitize(o, A = DEFAULT_ASPECT) {
   };
   s.output = sanitizeOutput(o.output);
   s.screenOutput = sanitizeScreenOutput(o.screenOutput);
+  s.gridSize = num(o.gridSize, 0.03, 0.4, DEFAULTS.gridSize);
   const list = Array.isArray(o.pumpkins) ? o.pumpkins.slice(0, MAX_PUMPKINS) : [];
   const src = list.length ? list : [{ face: typeof o.face === 'string' ? o.face : undefined }];
   // Settings saved before quads: place them from the group x, y, size and each pumpkin's old dx, dy, scale.
