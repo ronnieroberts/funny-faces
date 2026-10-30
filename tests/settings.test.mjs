@@ -114,3 +114,10 @@ test('mirroring a quad swaps left and right and is its own inverse', () => {
   assert.deepEqual(mirrorQuad(q), [[0.4, 0.25], [0.1, 0.2], [0.05, 0.55], [0.45, 0.6]]);
   assert.deepEqual(mirrorQuad(mirrorQuad(q)), q);
 });
+
+test('the grid size is saved and limited', () => {
+  assert.equal(sanitize({}).gridSize, 0.1);
+  assert.equal(sanitize({ gridSize: 0.25 }).gridSize, 0.25);
+  assert.equal(sanitize({ gridSize: 5 }).gridSize, 0.4);
+  assert.equal(sanitize({ gridSize: 'x' }).gridSize, 0.1);
+});

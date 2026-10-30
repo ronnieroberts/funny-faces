@@ -110,3 +110,13 @@ test('parseState: a face key that names an inherited property is not a face', ()
   st.pumpkins[0].face = 'toString';
   assert.equal(parseState(st), null);
 });
+
+test('the alignment grid travels to the screens only while editing, and is limited to sensible sizes', () => {
+  const off = parseState(JSON.parse(JSON.stringify(buildState(three, faceFor))));
+  assert.equal(off.grid, 0);
+  const on = parseState(JSON.parse(JSON.stringify(buildState(three, faceFor, 1, 0.2))));
+  assert.equal(on.grid, 0.2);
+  assert.equal(buildState(three, faceFor, 1, 9).grid, 0.4);
+  assert.equal(parseState({ ...buildState(three, faceFor), grid: 'x' }).grid, 0);
+  assert.equal(parseState({ ...buildState(three, faceFor), grid: 5 }).grid, 0);
+});
