@@ -4,12 +4,13 @@ import { sanitize, sanitizeScreenOutput, MAX_PUMPKINS } from './settings.js';
 
 /** epoch is a random number picked each time the main screen page loads; it tells screens to forget old counters.
  *  faceFor(key) gives the face object for a pumpkin's face key. Only the enabled pumpkins are sent. */
-export function buildState(settings, faceFor, epoch = 0) {
+export function buildState(settings, faceFor, epoch = 0, grid = 0) {
   const on = settings.pumpkins.filter((p) => p.enabled), faces = {};
   for (const p of on) if (!faces[p.face]) faces[p.face] = faceFor(p.face);
   return {
     epoch, color: settings.color, glow: settings.glow, x: settings.x, y: settings.y, size: settings.size, idleDim: settings.adv.idleDim,
     pumpkins: on.map((p) => ({ face: p.face, quad: p.quad, color: p.color, mirror: p.mirror === true })), faces,
+    grid: grid > 0 ? Math.min(0.4, Math.max(0.03, grid)) : 0,     // an alignment grid (cell size) while the control page is editing on the stage, else 0
     screenOutput: sanitizeScreenOutput(settings.screenOutput),   // mirror / flip for every screen; this page's own `output` is never sent
   };
 }
@@ -27,7 +28,8 @@ export function parseState(obj) {
     const pumpkins = s.pumpkins.map((p, i) => ({ face: Object.hasOwn(faces, obj.pumpkins[i].face) ? faces[obj.pumpkins[i].face] : undefined, quad: p.quad, color: p.color, mirror: p.mirror }));   // quad: re-validated, or the default place if it was bad
     if (!pumpkins.length || pumpkins.some((p) => !p.face)) return null;
     const epoch = Number.isInteger(obj.epoch) && obj.epoch >= 0 && obj.epoch < 2 ** 31 ? obj.epoch : 0;
-    return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins, screenOutput: sanitizeScreenOutput(obj.screenOutput) };
+    return { epoch, color: s.color, glow: s.glow, x: s.x, y: s.y, size: s.size, idleDim: s.adv.idleDim, pumpkins, screenOutput: sanitizeScreenOutput(obj.screenOutput),
+      grid: typeof obj.grid === 'number' && obj.grid >= 0.03 && obj.grid <= 0.4 ? obj.grid : 0 };
   } catch { return null; }
 }
 

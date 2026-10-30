@@ -220,6 +220,8 @@ $('resetskew').addEventListener('click', () => {
 const screenMode = params.has('screen');                // this page is a display, not the main screen
 if (screenMode) document.body.classList.add('screen');
 
+let editingNow = false;                                 // editing on the stage: the screens show the alignment grid
+const showGrid = (cell) => { const g = $('grid'); g.hidden = !cell; if (cell) g.style.setProperty('--cell', cell); };
 let display = null;                                     // on a screen: the look the control page last sent
 // ---- output: mirror, flip and keep-awake belong to this device (a screen keeps its own, from ?mirror=1&flip=1&awake=0)
 const output = screenMode ? loadScreenOutput(params) : settings.output;
@@ -269,7 +271,7 @@ function screensText() {
 }
 function pushState() {
   if (!ready || screenMode) return;
-  link.send({ action: 'state', state: buildState(settings, (key) => findFace(faces, key).face, epoch), n: ++seq });
+  link.send({ action: 'state', state: buildState(settings, (key) => findFace(faces, key).face, epoch, editingNow ? settings.gridSize : 0), n: ++seq });
 }
 function scheduleShare() { if (!shareTimer) shareTimer = setTimeout(() => { shareTimer = 0; pushState(); }, 150); }   // at most every 150 ms, so a drag shows live on the other screens
 
@@ -352,13 +354,13 @@ function startDisplayLink() {
         if (st.epoch !== curEpoch) { curEpoch = st.epoch; lastState = -1; follow.reset(); }
         if (!isNewer(m.n, lastState)) return;
         if (Number.isInteger(m.n)) lastState = m.n;
-        display = st; $('pairbox').hidden = true; showOutput();
+        display = st; $('pairbox').hidden = true; showOutput(); showGrid(st.grid);
       } else if (m.type === 'admin_gone') {
         follow.adminGone();
       } else if (m.type === 'admin_back') {
         follow.adminBack();
       } else if (m.type === 'ended' || (m.type === 'error' && m.error === 'unknown_session')) {
-        mem.del(SCREEN_KEY); display = null; showOutput(); link.send({ action: 'register' });
+        mem.del(SCREEN_KEY); display = null; showOutput(); showGrid(0); link.send({ action: 'register' });
       }
     },
     close() {
@@ -539,9 +541,11 @@ const editor = createEditor({
   onMode(on) {
     $('overlay').hidden = !on; $('edithint').hidden = !on; $('finishedit').hidden = !on; $('editbtn').textContent = on ? 'Finish editing' : 'Edit on the stage';
     canvas.classList.toggle('editing', on); document.body.classList.toggle('editing-faces', on);
+    editingNow = on; showGrid(on ? settings.gridSize : 0); scheduleShare();
     if (on) { showMenu(false); toast('Editing: Esc or E to finish'); }
   },
 });
+$('gridsize').addEventListener('input', () => { if (editingNow) showGrid(settings.gridSize); });     // after the data-path binder has stored it
 $('editbtn').addEventListener('click', () => { if (!screenMode) editor.toggle(); });
 $('finishedit').addEventListener('click', () => { editor.setOn(false); showMenu(true); });   // touch has no Esc or E, and the menu tap is off while editing
 

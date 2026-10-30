@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Editing on the stage shows an alignment grid on the stage and on every connected screen, with a Grid slider in the top right to change the cell size. It goes away when you finish editing.
+
 ## 1.0.5
 
 - Mirror this face (Faces tab, *Look of this face*): each face can look the other way, for example two faces looking at each other. It travels to the other screens.
