@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mirror and flip for the other screens: the Screens tab has *Mirror all screens* and *Flip all screens*, which change every connected screen at once. Before, mirroring on the control page (Look tab) only affected that page, and a screen only took mirror and flip from its address.
+
 ## 1.0.3
 
 - A screen that loses its connection now frowns (the mouth closes and the face droops) until it reconnects.

@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOutputParams, applyOutput, screenAddress, loadScreenOutput, createWakeLock, awakeMessage } from '../src/output.js';
 import { sanitize, load, DEFAULTS } from '../src/settings.js';
-import { buildState } from '../src/share.js';
+import { buildState, parseState } from '../src/share.js';
+import { builtIn } from '../src/packs.js';
+
+const faceFor = () => builtIn().faces[0];
 
 const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
 const q = (s) => new URLSearchParams(s);
@@ -25,11 +28,20 @@ test('defaults and migration of old saved settings', () => {
   assert.equal(load(s).output.keepAwake, true);
 });
 
-test('share state never contains output', () => {
+test("share state never contains this page's own output", () => {
   const settings = sanitize({ output: { mirror: true, flip: true, keepAwake: false } });
   const st = buildState(settings, () => ({ id: 'f' }), 1);
   assert.equal('output' in st, false);
-  assert.equal(JSON.stringify(st).includes('mirror'), false);
+  assert.deepEqual(st.screenOutput, { mirror: false, flip: false });
+});
+
+test('mirror and flip for every screen travel with the look and are validated', () => {
+  const settings = sanitize({ screenOutput: { mirror: true, flip: 'yes' } });
+  assert.deepEqual(settings.screenOutput, { mirror: true, flip: false });
+  const st = buildState(settings, (k) => faceFor(k), 1);
+  assert.deepEqual(st.screenOutput, { mirror: true, flip: false });
+  assert.deepEqual(parseState(JSON.parse(JSON.stringify(st))).screenOutput, { mirror: true, flip: false });
+  assert.deepEqual(parseState({ ...JSON.parse(JSON.stringify(st)), screenOutput: 'x' }).screenOutput, { mirror: false, flip: false });
 });
 
 test('applyOutput sets and clears the body attributes', () => {
