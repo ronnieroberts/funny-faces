@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Face packs version 2: a `path` layer takes SVG path data (curves, real stroke widths, opacity), so a face can be a smooth line drawing and the file is about half the size. Version 1 packs work as before. See `docs/FACEPACK.md`.
+
 ## 1.0.5
 
 - Mirror this face (Faces tab, *Look of this face*): each face can look the other way, for example two faces looking at each other. It travels to the other screens.
